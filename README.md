@@ -1,6 +1,6 @@
 # Soccer Stats Tracker — Android
 
-Youth soccer stat tracking. **Step 1 of the build: team and roster creation.**
+Youth soccer stat tracking. **Built so far: teams, rosters, and the formation library.**
 
 Kotlin · Jetpack Compose (Material 3) · Room (local-only, works with no signal) · minSdk 26
 
@@ -34,6 +34,17 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Mark a player active/inactive — inactive players stay on the roster but will be excluded from
   game lineups later; they're dimmed in the list
 - Remove a player, with confirmation
+- Keyboard **Next** walks down the form; **Save & add another** keeps it open for the next player,
+  so a full roster can be typed in one sitting
+
+**Formations**
+
+- Shared library across all your teams, filtered by 4v4 / 7v7 / 9v9 / 11v11
+- 19 built-in formations seeded on first launch, including keeperless 4v4 shapes
+- Drag markers on a pitch to build or adjust a shape; tap a marker to change its role or give it a
+  custom label like "LB" or "CDM"
+- Duplicate any formation (editing a built-in one silently forks it, so presets stay intact)
+- Presets reappear if you ever delete every formation in the library
 
 ---
 
@@ -44,21 +55,29 @@ app/src/main/java/com/bexner/soccerstats/
 ├── SoccerStatsApplication.kt      Manual DI container (holds the repository)
 ├── MainActivity.kt                Compose entry point
 ├── data/
-│   ├── entity/                    Team, Player, Position, TeamWithPlayerCount
-│   ├── dao/                       TeamDao, PlayerDao
-│   ├── SoccerDatabase.kt          Room database + type converters
+│   ├── entity/                    Team, Player, Position, MatchFormat,
+│   │                              Formation, FormationSlot, + relation POJOs
+│   ├── dao/                       TeamDao, PlayerDao, FormationDao
+│   ├── FormationPresets.kt        The 19 built-in shapes
+│   ├── SoccerDatabase.kt          Room database, converters, migrations
 │   └── SoccerRepository.kt        Single data entry point for the UI
 └── ui/
     ├── AppViewModelProvider.kt    ViewModel factory
     ├── theme/                     Material 3 pitch-green theme
     ├── navigation/                Routes + NavHost
+    ├── components/PitchView.kt    Reusable draggable pitch canvas
     ├── teams/                     TeamListScreen, TeamEditScreen (+ ViewModels)
-    └── roster/                    RosterScreen, PlayerEditScreen (+ ViewModels)
+    ├── roster/                    RosterScreen, PlayerEditScreen (+ ViewModels)
+    └── formations/                FormationListScreen, FormationEditScreen (+ ViewModels)
 ```
 
-**Why it's shaped this way:** screens only ever talk to `SoccerRepository`, never to DAOs. Schedules,
-formations and live game stats each become new entities + DAO methods behind that same repository,
-so none of the existing screens need to change.
+**Why it's shaped this way:** screens only ever talk to `SoccerRepository`, never to DAOs. Schedules
+and live game stats each become new entities + DAO methods behind that same repository, so none of
+the existing screens need to change.
+
+`PitchView` is deliberately generic — it takes normalized markers and reports drags back the same
+way. Lineups and the live substitution screen render on that same component rather than each
+growing their own pitch.
 
 ---
 
@@ -69,18 +88,37 @@ so none of the existing screens need to change.
 **`players`** — `id`, `teamId` (FK → teams, `ON DELETE CASCADE`), `firstName`, `lastName`,
 `jerseyNumber` (nullable), `position`, `isActive`, `createdAt`
 
-`Position` is an enum stored as text: `GOALKEEPER`, `DEFENDER`, `MIDFIELDER`, `FORWARD`, `UNASSIGNED`.
+**`formations`** — `id`, `name`, `format`, `hasKeeper`, `isPreset`, `notes`, `createdAt`
 
-Database is at **version 1**. Adding schedules/formations/stats will need a version bump plus a
-migration (or `fallbackToDestructiveMigration()` while you're still developing — worth adding to
-`SoccerDatabase` if you don't mind wiping test data between builds).
+**`formation_slots`** — `id`, `formationId` (FK → formations, `ON DELETE CASCADE`), `slotIndex`,
+`role`, `x`, `y`, `label`
+
+`Position` is an enum stored as text: `GOALKEEPER`, `DEFENDER`, `MIDFIELDER`, `FORWARD`, `UNASSIGNED`.
+`MatchFormat` likewise: `FOUR_V_FOUR`, `SEVEN_V_SEVEN`, `NINE_V_NINE`, `ELEVEN_V_ELEVEN`.
+
+### Pitch coordinates
+
+Slot `x` / `y` are normalized `0f..1f` so a shape renders identically on any screen. **`y = 1f` is
+your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 0.93f`, strikers near
+`y = 0.18f`. Anything reading or writing slot positions must respect that, including lineups later.
+
+### Migrations
+
+Database is at **version 2**. `MIGRATION_1_2` adds the two formation tables and leaves teams and
+rosters untouched, so upgrading keeps existing data.
+
+Each future feature needs a version bump and a migration in `SoccerDatabase.kt`. Note that Room
+validates migrations at runtime, not compile time — CI going green does **not** prove a migration is
+correct. Test upgrades by installing over an existing build, not just a fresh install.
 
 ---
 
 ## Next steps, in build order
 
-1. **Schedules** — `Game` entity (opponent, kickoff time, home/away, location) tied to a team
-2. **Formations** — formation templates (4-4-2, 3-5-2, …) and per-game lineup assignments
+1. **Lineups** — bind real players to a formation's slots, saved per team so a starting XI can be
+   reused week to week. This is the payoff for the formation library.
+2. **Schedules** — `Game` entity (opponent, kickoff time, home/away, location) tied to a team, with a
+   lineup attached to each game
 3. **Live stat tracking** — the big one: an in-game screen with large tap targets for goals, assists,
    shots, saves, fouls, cards, plus substitution and minutes-played timing
 4. **Excel export** — Apache POI or a CSV writer, sharing via `FileProvider`

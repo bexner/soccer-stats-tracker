@@ -47,15 +47,41 @@ The bundled JDK is fine — you don't need to install Java separately.
 
 ---
 
-## 3. Open the project and generate the wrapper
+## 3. Get the Gradle wrapper in place
 
-1. Android Studio → **File → Open** → `C:\dev\SoccerStatsTracker`
-2. It will notice `gradle-wrapper.jar` is missing and show a prompt about the Gradle wrapper or the
-   Gradle JDK. Choose the option to **use the Gradle wrapper** — Studio creates the missing jar,
-   plus `gradlew` and `gradlew.bat`, automatically.
-3. If no prompt appears, go to **File → Settings → Build, Execution, Deployment → Build Tools → Gradle**,
-   set **Use Gradle from: `'gradle-wrapper.properties' file`**, click OK, then **File → Sync Project with Gradle Files**.
-4. Wait for the sync. First run downloads all dependencies — several minutes.
+> **Note:** an earlier version of this guide told you to set **Use Gradle from:** in
+> *Settings → Build Tools → Gradle*. Recent Android Studio releases removed that dropdown — the
+> page now only exposes **Gradle JDK**, and Studio reads `gradle-wrapper.properties` on its own.
+> Ignore any instructions that mention it. Get the wrapper from CI instead.
+
+**Take the wrapper CI already built for you.** The `android.yml` workflow generates one on every run
+and uploads it, precisely so this isn't a manual step.
+
+1. Repo → **Actions** → click a green run → scroll to **Artifacts** → download **`gradle-wrapper`**
+2. Unzip into the project root. The archive preserves the `gradle/wrapper/` path, so files land correctly:
+
+   ```powershell
+   cd C:\dev\SoccerStatsTracker
+   Expand-Archive -Path "$env:USERPROFILE\Downloads\gradle-wrapper.zip" -DestinationPath . -Force
+   ```
+
+3. Confirm it works — this should print `Gradle 8.9`:
+
+   ```powershell
+   Test-Path gradle\wrapper\gradle-wrapper.jar
+   .\gradlew.bat --version
+   ```
+
+4. Commit it, so it's a one-time problem:
+
+   ```powershell
+   git add gradle/wrapper/gradle-wrapper.jar gradlew gradlew.bat
+   git commit -m "Add Gradle wrapper"
+   git push
+   ```
+
+5. Android Studio → **File → Open** → `C:\dev\SoccerStatsTracker`, then
+   **File → Sync Project with Gradle Files**. First sync downloads all dependencies — several minutes.
 
 If the sync fails, don't debug it alone. Go to step 6.
 

@@ -6,6 +6,8 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bexner.soccerstats.SoccerStatsApplication
+import com.bexner.soccerstats.ui.formations.FormationEditViewModel
+import com.bexner.soccerstats.ui.formations.FormationListViewModel
 import com.bexner.soccerstats.ui.roster.PlayerEditViewModel
 import com.bexner.soccerstats.ui.roster.RosterViewModel
 import com.bexner.soccerstats.ui.teams.TeamEditViewModel
@@ -18,6 +20,8 @@ object AppViewModelProvider {
         initializer { TeamEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
         initializer { RosterViewModel(createSavedStateHandle(), soccerApplication().repository) }
         initializer { PlayerEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { FormationListViewModel(soccerApplication().repository) }
+        initializer { FormationEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
     }
 }
 

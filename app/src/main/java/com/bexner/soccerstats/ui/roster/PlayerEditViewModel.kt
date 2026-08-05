@@ -79,6 +79,23 @@ class PlayerEditViewModel(
     }
 
     fun save(onSaved: () -> Unit) {
+        persist(onSaved)
+    }
+
+    /**
+     * Saves the current player and clears the form so the next one can be typed
+     * straight away. Keeps the chosen position, since rosters are usually entered
+     * a line at a time.
+     */
+    fun saveAndAddAnother(onReset: () -> Unit) {
+        val keptPosition = form.position
+        persist {
+            form = PlayerFormState(position = keptPosition)
+            onReset()
+        }
+    }
+
+    private fun persist(onSaved: () -> Unit) {
         if (form.firstName.isBlank()) {
             form = form.copy(firstNameError = "First name is required")
             return

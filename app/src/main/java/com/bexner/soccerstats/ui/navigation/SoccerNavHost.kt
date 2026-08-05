@@ -7,6 +7,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.bexner.soccerstats.ui.formations.FormationEditScreen
+import com.bexner.soccerstats.ui.formations.FormationListScreen
 import com.bexner.soccerstats.ui.roster.PlayerEditScreen
 import com.bexner.soccerstats.ui.roster.RosterScreen
 import com.bexner.soccerstats.ui.teams.TeamEditScreen
@@ -28,6 +30,16 @@ object Routes {
     /** playerId of 0 means "new player". */
     const val PLAYER_EDIT = "teams/{$TEAM_ID_ARG}/roster/edit/{$PLAYER_ID_ARG}"
     fun playerEdit(teamId: Long, playerId: Long = 0L) = "teams/$teamId/roster/edit/$playerId"
+
+    const val FORMATION_ID_ARG = "formationId"
+    const val FORMAT_ARG = "format"
+
+    const val FORMATION_LIST = "formations"
+
+    /** formationId of 0 means "new formation"; format seeds the starting shape. */
+    const val FORMATION_EDIT = "formations/edit/{$FORMATION_ID_ARG}?$FORMAT_ARG={$FORMAT_ARG}"
+    fun formationEdit(formationId: Long = 0L, format: String = "") =
+        "formations/edit/$formationId?$FORMAT_ARG=$format"
 }
 
 @Composable
@@ -39,7 +51,8 @@ fun SoccerNavHost(
         composable(Routes.TEAM_LIST) {
             TeamListScreen(
                 onAddTeam = { navController.navigate(Routes.teamEdit()) },
-                onOpenTeam = { teamId -> navController.navigate(Routes.roster(teamId)) }
+                onOpenTeam = { teamId -> navController.navigate(Routes.roster(teamId)) },
+                onOpenFormations = { navController.navigate(Routes.FORMATION_LIST) }
             )
         }
 
@@ -64,6 +77,27 @@ fun SoccerNavHost(
                     navController.popBackStack(Routes.TEAM_LIST, inclusive = false)
                 }
             )
+        }
+
+        composable(Routes.FORMATION_LIST) {
+            FormationListScreen(
+                onBack = { navController.popBackStack() },
+                onCreate = { format -> navController.navigate(Routes.formationEdit(format = format.name)) },
+                onOpen = { formationId -> navController.navigate(Routes.formationEdit(formationId)) }
+            )
+        }
+
+        composable(
+            route = Routes.FORMATION_EDIT,
+            arguments = listOf(
+                navArgument(Routes.FORMATION_ID_ARG) { type = NavType.LongType },
+                navArgument(Routes.FORMAT_ARG) {
+                    type = NavType.StringType
+                    defaultValue = ""
+                }
+            )
+        ) {
+            FormationEditScreen(onDone = { navController.popBackStack() })
         }
 
         composable(
