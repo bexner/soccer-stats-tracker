@@ -17,6 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -37,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bexner.soccerstats.data.entity.MatchFormat
 import com.bexner.soccerstats.data.entity.Position
+import com.bexner.soccerstats.data.entity.ShapePhase
 import com.bexner.soccerstats.ui.AppViewModelProvider
 import com.bexner.soccerstats.ui.components.PitchMarker
 import com.bexner.soccerstats.ui.components.PitchView
@@ -50,7 +55,7 @@ fun FormationEditScreen(
     val state = viewModel.state
 
     // Marker ids are slot indexes here, so drag callbacks map straight back to slots.
-    val markers = state.slots.map { slot ->
+    val markers = state.currentSlots.map { slot ->
         PitchMarker(
             id = slot.slotIndex.toLong(),
             x = slot.x,
@@ -127,8 +132,23 @@ fun FormationEditScreen(
                 )
             }
 
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ShapePhase.all.forEachIndexed { index, phase ->
+                    SegmentedButton(
+                        selected = state.phase == phase,
+                        onClick = { viewModel.onPhaseChange(phase) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = ShapePhase.all.size
+                        ),
+                        label = { Text(phase.label) }
+                    )
+                }
+            }
+
             Text(
-                text = "Drag the markers to shape your formation. Tap one to change its role or label.",
+                text = "Drag the markers to shape your ${state.phase.label.lowercase()} shape. " +
+                    "Tap one to change its role or label.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -143,8 +163,20 @@ fun FormationEditScreen(
                     .aspectRatio(0.66f)
             )
 
+            if (!state.isCurrentPhaseComplete) {
+                TextButton(onClick = viewModel::copyFromOtherPhase) {
+                    Text(
+                        if (state.phase == ShapePhase.ATTACKING) {
+                            "Start from the defending shape"
+                        } else {
+                            "Start from the attacking shape"
+                        }
+                    )
+                }
+            }
+
             state.selectedSlotIndex?.let { index ->
-                val slot = state.slots.firstOrNull { it.slotIndex == index }
+                val slot = state.currentSlots.firstOrNull { it.slotIndex == index }
                 if (slot != null) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(
@@ -182,10 +214,20 @@ fun FormationEditScreen(
                 }
             }
 
+            OutlinedTextField(
+                value = state.notes,
+                onValueChange = viewModel::onNotesChange,
+                label = { Text("Transition notes (optional)") },
+                placeholder = { Text("How the shape changes when you win or lose the ball") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Text(
-                text = "${state.placed} of ${state.required} players placed",
+                text = "${state.placed} of ${state.required} placed in the " +
+                    "${state.phase.label.lowercase()} shape",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (state.isComplete) {
+                color = if (state.isCurrentPhaseComplete) {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 } else {
                     MaterialTheme.colorScheme.error

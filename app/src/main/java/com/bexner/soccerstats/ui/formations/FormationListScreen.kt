@@ -191,7 +191,8 @@ private fun FormationCard(
                     text = buildString {
                         append(entry.formation.format.label)
                         append(" · ")
-                        append(if (entry.formation.hasKeeper) "with keeper" else "no keeper")
+                        append(entry.shapeSummary.ifBlank { if (entry.formation.hasKeeper) "with keeper" else "no keeper" })
+                        if (entry.hasBothPhases) append(" · both shapes")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

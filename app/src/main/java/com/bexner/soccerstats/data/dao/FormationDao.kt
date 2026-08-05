@@ -10,6 +10,7 @@ import com.bexner.soccerstats.data.entity.Formation
 import com.bexner.soccerstats.data.entity.FormationSlot
 import com.bexner.soccerstats.data.entity.FormationWithSlots
 import com.bexner.soccerstats.data.entity.MatchFormat
+import com.bexner.soccerstats.data.entity.ShapePhase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -55,11 +56,21 @@ interface FormationDao {
     @Query("DELETE FROM formation_slots WHERE formationId = :formationId")
     suspend fun deleteSlotsFor(formationId: Long)
 
-    /** Replaces a formation's markers wholesale — simplest correct way to save an edit. */
+    @Query("DELETE FROM formation_slots WHERE formationId = :formationId AND phase = :phase")
+    suspend fun deleteSlotsFor(formationId: Long, phase: ShapePhase)
+
+    /** Replaces every marker on a formation — used when saving both shapes at once. */
     @Transaction
     suspend fun replaceSlots(formationId: Long, slots: List<FormationSlot>) {
         deleteSlotsFor(formationId)
         insertSlots(slots.map { it.copy(id = 0, formationId = formationId) })
+    }
+
+    /** Replaces just one shape, leaving the other phase untouched. */
+    @Transaction
+    suspend fun replaceSlots(formationId: Long, phase: ShapePhase, slots: List<FormationSlot>) {
+        deleteSlotsFor(formationId, phase)
+        insertSlots(slots.map { it.copy(id = 0, formationId = formationId, phase = phase) })
     }
 
     @Transaction

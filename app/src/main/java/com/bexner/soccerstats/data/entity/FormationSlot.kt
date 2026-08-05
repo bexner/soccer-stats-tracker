@@ -23,13 +23,15 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("formationId")]
+    indices = [Index("formationId"), Index("formationId", "phase")]
 )
 data class FormationSlot(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val formationId: Long,
-    /** Draw/tab order, 0-based. Keeper is 0 when the formation has one. */
+    /** Which shape this marker belongs to. */
+    val phase: ShapePhase = ShapePhase.DEFENDING,
+    /** Draw/tab order within the phase, 0-based. Keeper is 0 when there is one. */
     val slotIndex: Int,
     val role: Position,
     val x: Float,

@@ -41,8 +41,13 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 
 - Shared library across all your teams, filtered by 4v4 / 7v7 / 9v9 / 11v11
 - 19 built-in formations seeded on first launch, including keeperless 4v4 shapes
+- Each formation holds **two shapes** — Defending and Attacking — for the same players, toggled in
+  the editor. One lineup will later serve both.
 - Drag markers on a pitch to build or adjust a shape; tap a marker to change its role or give it a
-  custom label like "LB" or "CDM"
+  custom label like "LB", "CDM", or a shirt number
+- "Start from the other shape" copies one phase onto the other so you only move the players who
+  actually change
+- Free-text transition notes per formation
 - Duplicate any formation (editing a built-in one silently forks it, so presets stay intact)
 - Presets reappear if you ever delete every formation in the library
 
@@ -59,6 +64,7 @@ app/src/main/java/com/bexner/soccerstats/
 │   │                              Formation, FormationSlot, + relation POJOs
 │   ├── dao/                       TeamDao, PlayerDao, FormationDao
 │   ├── FormationPresets.kt        The 19 built-in shapes
+│   ├── DevSeed.kt                 Debug-only real team/roster/systems
 │   ├── SoccerDatabase.kt          Room database, converters, migrations
 │   └── SoccerRepository.kt        Single data entry point for the UI
 └── ui/
@@ -90,8 +96,11 @@ growing their own pitch.
 
 **`formations`** — `id`, `name`, `format`, `hasKeeper`, `isPreset`, `notes`, `createdAt`
 
-**`formation_slots`** — `id`, `formationId` (FK → formations, `ON DELETE CASCADE`), `slotIndex`,
-`role`, `x`, `y`, `label`
+**`formation_slots`** — `id`, `formationId` (FK → formations, `ON DELETE CASCADE`), `phase`,
+`slotIndex`, `role`, `x`, `y`, `label`
+
+`phase` is `DEFENDING` or `ATTACKING`. A formation's slots are the union of both shapes; filter by
+phase to get one. `slotIndex` restarts at 0 per phase.
 
 `Position` is an enum stored as text: `GOALKEEPER`, `DEFENDER`, `MIDFIELDER`, `FORWARD`, `UNASSIGNED`.
 `MatchFormat` likewise: `FOUR_V_FOUR`, `SEVEN_V_SEVEN`, `NINE_V_NINE`, `ELEVEN_V_ELEVEN`.
@@ -104,12 +113,33 @@ your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 
 
 ### Migrations
 
-Database is at **version 2**. `MIGRATION_1_2` adds the two formation tables and leaves teams and
-rosters untouched, so upgrading keeps existing data.
+Database is at **version 3**.
+
+- `MIGRATION_1_2` adds the two formation tables, leaving teams and rosters untouched.
+- `MIGRATION_2_3` adds `phase` to `formation_slots`, defaulting existing rows to `DEFENDING` —
+  which is what a single-shape formation always meant.
 
 Each future feature needs a version bump and a migration in `SoccerDatabase.kt`. Note that Room
 validates migrations at runtime, not compile time — CI going green does **not** prove a migration is
 correct. Test upgrades by installing over an existing build, not just a fresh install.
+
+---
+
+## Seed data
+
+Two separate mechanisms, deliberately:
+
+**`FormationPresets`** — the 19 generic shapes. Ships in every build, inserted when the formation
+library is empty, so deleting them all brings them back.
+
+**`DevSeed`** — Blackhawks Bronze (U11), its 11-player roster, and the Base / Aggressive /
+Conservative systems. **Debug builds only**, gated on `BuildConfig.DEBUG` in
+`SoccerStatsApplication`, so a release build never ships a real roster. It's idempotent — keyed on
+the team name — so hand-edits to seeded data survive the next launch instead of being overwritten.
+
+To change the seeded team or systems, edit `DevSeed.kt`. To get a clean slate, uninstall and
+reinstall. Both `FormationPresets.validate()` and `DevSeed.validate()` run on debug launch and log
+any malformed shape to Logcat under the `SoccerStats` tag.
 
 ---
 

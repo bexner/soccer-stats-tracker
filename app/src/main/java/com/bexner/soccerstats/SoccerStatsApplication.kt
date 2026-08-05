@@ -1,6 +1,9 @@
 package com.bexner.soccerstats
 
 import android.app.Application
+import android.util.Log
+import com.bexner.soccerstats.data.DevSeed
+import com.bexner.soccerstats.data.FormationPresets
 import com.bexner.soccerstats.data.SoccerDatabase
 import com.bexner.soccerstats.data.SoccerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -23,10 +26,20 @@ class SoccerStatsApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Fills the formation library on first launch, and after an upgrade that
-        // added it to an existing database.
+
         applicationScope.launch {
+            // Fills the formation library on first launch, and after an upgrade
+            // that added it to an existing database.
             repository.seedPresetFormationsIfEmpty()
+
+            if (BuildConfig.DEBUG) {
+                // Shape definitions are hand-written, so surface a bad one in
+                // Logcat rather than letting it quietly load a broken formation.
+                (FormationPresets.validate() + DevSeed.validate()).forEach { problem ->
+                    Log.e("SoccerStats", "Seed data problem: $problem")
+                }
+                repository.seedDevDataIfMissing()
+            }
         }
     }
 }

@@ -11,25 +11,44 @@ import com.bexner.soccerstats.data.entity.Formation
 import com.bexner.soccerstats.data.entity.FormationSlot
 import com.bexner.soccerstats.data.entity.MatchFormat
 import com.bexner.soccerstats.data.entity.Position
+import com.bexner.soccerstats.data.entity.ShapePhase
 import com.bexner.soccerstats.ui.navigation.Routes
 import kotlinx.coroutines.launch
 
 /**
- * Slots are held in memory as the coach drags them and written in one go on save,
- * so a half-finished shape never lands in the database.
+ * Holds both shapes in memory while the coach drags markers around, and writes
+ * them in one transaction on save, so a half-finished shape never reaches the
+ * database.
  */
 data class FormationEditState(
     val name: String = "",
     val format: MatchFormat = MatchFormat.SEVEN_V_SEVEN,
     val hasKeeper: Boolean = true,
+    val notes: String = "",
+    /** Every slot across both phases. */
     val slots: List<FormationSlot> = emptyList(),
+    val phase: ShapePhase = ShapePhase.DEFENDING,
     val selectedSlotIndex: Int? = null,
     val nameError: String? = null
 ) {
-    val placed: Int get() = slots.size
+    fun slotsFor(target: ShapePhase): List<FormationSlot> =
+        slots.filter { it.phase == target }.sortedBy { it.slotIndex }
+
+    val currentSlots: List<FormationSlot> get() = slotsFor(phase)
+
     val required: Int get() = format.playersOnField
-    val isComplete: Boolean get() = placed == required
-    val isValid: Boolean get() = name.isNotBlank() && isComplete
+
+    val placed: Int get() = currentSlots.size
+
+    fun isPhaseComplete(target: ShapePhase): Boolean = slotsFor(target).size == required
+
+    val isCurrentPhaseComplete: Boolean get() = isPhaseComplete(phase)
+
+    val hasAttackingShape: Boolean get() = slotsFor(ShapePhase.ATTACKING).isNotEmpty()
+
+    /** Defending is the shape a formation must have; attacking is optional. */
+    val isValid: Boolean
+        get() = name.isNotBlank() && isPhaseComplete(ShapePhase.DEFENDING)
 }
 
 class FormationEditViewModel(
@@ -38,7 +57,8 @@ class FormationEditViewModel(
 ) : ViewModel() {
 
     private val formationId: Long = savedStateHandle[Routes.FORMATION_ID_ARG] ?: 0L
-    private val initialFormat: String = savedStateHandle[Routes.FORMAT_ARG] ?: MatchFormat.SEVEN_V_SEVEN.name
+    private val initialFormat: String =
+        savedStateHandle[Routes.FORMAT_ARG] ?: MatchFormat.SEVEN_V_SEVEN.name
 
     val isNew: Boolean = formationId == 0L
 
@@ -50,10 +70,11 @@ class FormationEditViewModel(
     init {
         if (isNew) {
             val format = MatchFormat.fromName(initialFormat)
+            val keeper = format.keeperByDefault
             state = FormationEditState(
                 format = format,
-                hasKeeper = format.keeperByDefault,
-                slots = defaultSlots(format, format.keeperByDefault)
+                hasKeeper = keeper,
+                slots = bothPhaseDefaults(format, keeper)
             )
         } else {
             viewModelScope.launch {
@@ -63,6 +84,7 @@ class FormationEditViewModel(
                         name = entry.formation.name,
                         format = entry.formation.format,
                         hasKeeper = entry.formation.hasKeeper,
+                        notes = entry.formation.notes,
                         slots = entry.orderedSlots
                     )
                 }
@@ -74,13 +96,21 @@ class FormationEditViewModel(
         state = state.copy(name = value, nameError = null)
     }
 
+    fun onNotesChange(value: String) {
+        state = state.copy(notes = value)
+    }
+
+    fun onPhaseChange(phase: ShapePhase) {
+        state = state.copy(phase = phase, selectedSlotIndex = null)
+    }
+
     fun onFormatChange(format: MatchFormat) {
-        // Changing format changes how many markers are needed, so rebuild the shape.
+        // Changing format changes how many markers are needed, so rebuild both shapes.
         val keeper = format.keeperByDefault
         state = state.copy(
             format = format,
             hasKeeper = keeper,
-            slots = defaultSlots(format, keeper),
+            slots = bothPhaseDefaults(format, keeper),
             selectedSlotIndex = null
         )
     }
@@ -88,24 +118,20 @@ class FormationEditViewModel(
     fun onKeeperChange(hasKeeper: Boolean) {
         state = state.copy(
             hasKeeper = hasKeeper,
-            slots = defaultSlots(state.format, hasKeeper),
+            slots = bothPhaseDefaults(state.format, hasKeeper),
             selectedSlotIndex = null
         )
     }
 
     fun onSlotMoved(slotIndex: Int, x: Float, y: Float) {
+        val phase = state.phase
         state = state.copy(
             slots = state.slots.map {
-                if (it.slotIndex == slotIndex) it.copy(x = x, y = y) else it
+                if (it.phase == phase && it.slotIndex == slotIndex) it.copy(x = x, y = y) else it
             }
         )
     }
 
-    fun onSlotSelected(slotIndex: Int?) {
-        state = state.copy(selectedSlotIndex = slotIndex)
-    }
-
-    /** Toggles selection. Lives here so the tap handler captures no screen state. */
     fun onSlotTapped(slotIndex: Int) {
         state = state.copy(
             selectedSlotIndex = if (state.selectedSlotIndex == slotIndex) null else slotIndex
@@ -114,30 +140,59 @@ class FormationEditViewModel(
 
     fun onSelectedRoleChange(role: Position) {
         val index = state.selectedSlotIndex ?: return
+        val phase = state.phase
         state = state.copy(
             slots = state.slots.map {
-                if (it.slotIndex == index) it.copy(role = role) else it
+                if (it.phase == phase && it.slotIndex == index) it.copy(role = role) else it
             }
         )
     }
 
     fun onSelectedLabelChange(label: String) {
         val index = state.selectedSlotIndex ?: return
+        val phase = state.phase
         state = state.copy(
             slots = state.slots.map {
-                if (it.slotIndex == index) it.copy(label = label.take(4)) else it
+                if (it.phase == phase && it.slotIndex == index) it.copy(label = label.take(4)) else it
             }
         )
     }
 
+    /**
+     * Starts the current shape from the other one. Coaches usually move a handful
+     * of players between phases rather than redrawing from scratch.
+     */
+    fun copyFromOtherPhase() {
+        val target = state.phase
+        val source =
+            if (target == ShapePhase.DEFENDING) ShapePhase.ATTACKING else ShapePhase.DEFENDING
+        val sourceSlots = state.slotsFor(source)
+        if (sourceSlots.isEmpty()) return
+
+        state = state.copy(
+            slots = state.slots.filter { it.phase != target } +
+                sourceSlots.map { it.copy(id = 0, phase = target) },
+            selectedSlotIndex = null
+        )
+    }
+
+    private fun bothPhaseDefaults(format: MatchFormat, hasKeeper: Boolean): List<FormationSlot> =
+        defaultSlots(format, hasKeeper, ShapePhase.DEFENDING) +
+            defaultSlots(format, hasKeeper, ShapePhase.ATTACKING)
+
     /** Spreads the required markers into evenly spaced lines as a starting point. */
-    private fun defaultSlots(format: MatchFormat, hasKeeper: Boolean): List<FormationSlot> {
+    private fun defaultSlots(
+        format: MatchFormat,
+        hasKeeper: Boolean,
+        phase: ShapePhase
+    ): List<FormationSlot> {
         val slots = mutableListOf<FormationSlot>()
         var index = 0
 
         if (hasKeeper) {
             slots += FormationSlot(
                 formationId = formationId,
+                phase = phase,
                 slotIndex = index++,
                 role = Position.GOALKEEPER,
                 x = 0.5f,
@@ -146,20 +201,22 @@ class FormationEditViewModel(
         }
 
         val outfield = format.outfieldCount(hasKeeper)
-        // Split roughly into thirds: back, middle, front.
         val back = (outfield + 2) / 3
         val front = outfield / 3
         val middle = outfield - back - front
 
+        // The attacking default starts a little higher up the pitch.
+        val shift = if (phase == ShapePhase.ATTACKING) 0.06f else 0f
+
         fun line(count: Int, y: Float, role: Position) {
             repeat(count) { i ->
-                val x = (i + 1f) / (count + 1f)
                 slots += FormationSlot(
                     formationId = formationId,
+                    phase = phase,
                     slotIndex = index++,
                     role = role,
-                    x = x,
-                    y = y
+                    x = (i + 1f) / (count + 1f),
+                    y = (y - shift).coerceIn(0.03f, 0.97f)
                 )
             }
         }
@@ -183,6 +240,7 @@ class FormationEditViewModel(
                         name = state.name.trim(),
                         format = state.format,
                         hasKeeper = state.hasKeeper,
+                        notes = state.notes.trim(),
                         isPreset = false
                     ),
                     state.slots
@@ -193,6 +251,7 @@ class FormationEditViewModel(
                         name = state.name.trim(),
                         format = state.format,
                         hasKeeper = state.hasKeeper,
+                        notes = state.notes.trim(),
                         // An edited preset becomes the coach's own formation.
                         isPreset = false
                     ),

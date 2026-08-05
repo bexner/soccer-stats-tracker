@@ -16,6 +16,7 @@ import com.bexner.soccerstats.data.entity.FormationSlot
 import com.bexner.soccerstats.data.entity.MatchFormat
 import com.bexner.soccerstats.data.entity.Player
 import com.bexner.soccerstats.data.entity.Position
+import com.bexner.soccerstats.data.entity.ShapePhase
 import com.bexner.soccerstats.data.entity.Team
 
 class Converters {
@@ -31,6 +32,12 @@ class Converters {
 
     @TypeConverter
     fun stringToMatchFormat(value: String): MatchFormat = MatchFormat.fromName(value)
+
+    @TypeConverter
+    fun shapePhaseToString(phase: ShapePhase): String = phase.name
+
+    @TypeConverter
+    fun stringToShapePhase(value: String): ShapePhase = ShapePhase.fromName(value)
 }
 
 /**
@@ -74,9 +81,26 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/**
+ * v2 -> v3 gives every slot a phase, so one formation can hold a defending shape
+ * and an attacking shape for the same players. Existing slots become the
+ * defending shape, which is what a single-shape formation always represented.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `formation_slots` ADD COLUMN `phase` TEXT NOT NULL DEFAULT 'DEFENDING'"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_formation_slots_formationId_phase` " +
+                "ON `formation_slots` (`formationId`, `phase`)"
+        )
+    }
+}
+
 @Database(
     entities = [Team::class, Player::class, Formation::class, FormationSlot::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -98,7 +122,7 @@ abstract class SoccerDatabase : RoomDatabase() {
                     "soccer_stats.db"
                 )
                     // Foreign keys drive cascade deletes of players when a team is removed.
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

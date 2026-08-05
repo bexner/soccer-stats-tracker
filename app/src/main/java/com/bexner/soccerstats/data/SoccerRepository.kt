@@ -99,4 +99,21 @@ class SoccerRepository(
             formationDao.insertFormationWithSlots(formation, slots)
         }
     }
+
+    /**
+     * Loads the developer's own team, roster and systems on debug builds so a
+     * fresh install isn't empty. Keyed on the team name, so hand-editing seeded
+     * data survives the next launch instead of being clobbered.
+     */
+    suspend fun seedDevDataIfMissing() {
+        val alreadySeeded = teamDao.findByName(DevSeed.TEAM_NAME) != null
+        if (alreadySeeded) return
+
+        val teamId = teamDao.insert(DevSeed.team())
+        playerDao.insertAll(DevSeed.players(teamId))
+
+        DevSeed.formations().forEach { (formation, slots) ->
+            formationDao.insertFormationWithSlots(formation, slots)
+        }
+    }
 }

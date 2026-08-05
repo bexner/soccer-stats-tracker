@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import com.bexner.soccerstats.data.entity.FormationSlot
 import com.bexner.soccerstats.data.entity.FormationWithSlots
 import com.bexner.soccerstats.data.entity.Position
+import com.bexner.soccerstats.data.entity.ShapePhase
 import com.bexner.soccerstats.ui.components.PitchMarker
 
 /** Consistent colour per line, so a shape reads at a glance. */
@@ -23,4 +24,6 @@ fun FormationSlot.toMarker(): PitchMarker = PitchMarker(
     color = role.markerColor()
 )
 
-fun FormationWithSlots.toMarkers(): List<PitchMarker> = orderedSlots.map { it.toMarker() }
+/** Falls back to whatever shape exists so single-phase presets still preview. */
+fun FormationWithSlots.toMarkers(phase: ShapePhase = ShapePhase.DEFENDING): List<PitchMarker> =
+    slotsFor(phase).ifEmpty { orderedSlots }.map { it.toMarker() }

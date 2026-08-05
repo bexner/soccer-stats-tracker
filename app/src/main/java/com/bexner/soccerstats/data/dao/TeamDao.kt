@@ -30,6 +30,9 @@ interface TeamDao {
     @Query("SELECT * FROM teams WHERE id = :teamId")
     suspend fun getById(teamId: Long): Team?
 
+    @Query("SELECT * FROM teams WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): Team?
+
     @Insert
     suspend fun insert(team: Team): Long
 
