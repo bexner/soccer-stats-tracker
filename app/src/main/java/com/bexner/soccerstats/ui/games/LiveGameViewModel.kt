@@ -48,10 +48,41 @@ data class LiveGameUiState(
     /** Total match time each player has accumulated, open stints included. */
     fun minutesFor(playerId: Long, elapsedMs: Long): Long =
         stints.filter { it.playerId == playerId }.sumOf { it.durationMsAt(elapsedMs) }
+
+    /** Events that carry a pitch position, for the overlay. */
+    val positionedEvents: List<GameEvent> get() = events.filter { it.hasPitchPosition }
 }
 
-/** A pending event that still needs a player picked before it's written. */
-data class PendingEvent(val type: EventType, val side: EventSide)
+/** How events are being entered. */
+enum class EntryMode(val label: String) {
+    QUICK("Quick buttons"),
+    PITCH("Tap the pitch")
+}
+
+/** The step the event wizard is on, or null when nothing is being logged. */
+enum class DraftStage { PICK_ACTION, PICK_PLAYER, PICK_PLACEMENT }
+
+/** An event being assembled across one or more prompts. */
+data class EventDraft(
+    val side: EventSide,
+    val pitchX: Float? = null,
+    val pitchY: Float? = null,
+    val type: EventType? = null,
+    val playerId: Long? = null
+)
+
+/**
+ * Confirms back to the coach which third they tapped, using the same thresholds
+ * as [GameEvent.pitchThird] so the prompt and the stored value never disagree.
+ */
+fun EventDraft.pitchThirdLabel(): String? = pitchY?.let {
+    val third = when {
+        it >= 0.667f -> "defensive third"
+        it >= 0.333f -> "middle third"
+        else -> "attacking third"
+    }
+    "Tapped in the $third"
+}
 
 class LiveGameViewModel(
     savedStateHandle: SavedStateHandle,
@@ -60,11 +91,16 @@ class LiveGameViewModel(
 
     val gameId: Long = savedStateHandle[Routes.GAME_ID_ARG] ?: 0L
 
-    /** Which side the event buttons currently apply to. */
     var side by mutableStateOf(EventSide.US)
         private set
 
-    var pendingEvent by mutableStateOf<PendingEvent?>(null)
+    var entryMode by mutableStateOf(EntryMode.QUICK)
+        private set
+
+    var draft by mutableStateOf<EventDraft?>(null)
+        private set
+
+    var stage by mutableStateOf<DraftStage?>(null)
         private set
 
     /** Player coming off, waiting for a replacement to be chosen. */
@@ -72,8 +108,6 @@ class LiveGameViewModel(
         private set
 
     private val _elapsedMs = MutableStateFlow(0L)
-
-    /** Ticks once a second while running so the clock display stays live. */
     val elapsedMs: StateFlow<Long> = _elapsedMs.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -120,6 +154,13 @@ class LiveGameViewModel(
         side = value
     }
 
+    fun onEntryModeChange(value: EntryMode) {
+        entryMode = value
+        cancelDraft()
+    }
+
+    // ----- Clock -----
+
     fun startClock() {
         viewModelScope.launch { repository.startClock(gameId) }
     }
@@ -139,29 +180,94 @@ class LiveGameViewModel(
         }
     }
 
-    /**
-     * Events that name a player open a picker first; the rest are written on the
-     * single tap. Keeps the common case to one touch during a game.
-     */
+    // ----- Event wizard -----
+
+    /** Quick mode: action first, position never asked for. */
     fun onEventTapped(type: EventType) {
-        if (type.attributable && side == EventSide.US) {
-            pendingEvent = PendingEvent(type, side)
-        } else {
-            viewModelScope.launch { repository.logEvent(gameId, type, side) }
+        advance(EventDraft(side = side, type = type))
+    }
+
+    /** Pitch mode: position first, then action. */
+    fun onPitchTapped(x: Float, y: Float) {
+        draft = EventDraft(side = side, pitchX = x, pitchY = y)
+        stage = DraftStage.PICK_ACTION
+    }
+
+    fun onActionChosen(type: EventType) {
+        val current = draft ?: EventDraft(side = side)
+        advance(current.copy(type = type))
+    }
+
+    fun onPlayerChosen(playerId: Long?) {
+        val current = draft ?: return
+        advance(current.copy(playerId = playerId), playerResolved = true)
+    }
+
+    fun onPlacementChosen(goalX: Float, goalY: Float) {
+        val current = draft ?: return
+        commit(current, goalX, goalY)
+    }
+
+    fun skipPlacement() {
+        val current = draft ?: return
+        commit(current, null, null)
+    }
+
+    fun cancelDraft() {
+        draft = null
+        stage = null
+    }
+
+    /**
+     * Moves the draft to whatever it still needs, or writes it if it's complete.
+     * [playerResolved] distinguishes "no player chosen yet" from "deliberately
+     * logged without one", so skipping doesn't loop back to the same prompt.
+     */
+    private fun advance(next: EventDraft, playerResolved: Boolean = false) {
+        val type = next.type
+        if (type == null) {
+            draft = next
+            stage = DraftStage.PICK_ACTION
+            return
+        }
+
+        val needsPlayer = type.attributable &&
+            next.side == EventSide.US &&
+            !playerResolved &&
+            next.playerId == null
+
+        when {
+            needsPlayer -> {
+                draft = next
+                stage = DraftStage.PICK_PLAYER
+            }
+            type in EventType.placementRelevant -> {
+                draft = next
+                stage = DraftStage.PICK_PLACEMENT
+            }
+            else -> commit(next, null, null)
         }
     }
 
-    fun confirmPendingEvent(playerId: Long?) {
-        val pending = pendingEvent ?: return
-        pendingEvent = null
+    private fun commit(source: EventDraft, goalX: Float?, goalY: Float?) {
+        val type = source.type ?: return
+        draft = null
+        stage = null
         viewModelScope.launch {
-            repository.logEvent(gameId, pending.type, pending.side, playerId)
+            repository.logEvent(
+                gameId = gameId,
+                type = type,
+                side = source.side,
+                playerId = source.playerId,
+                pitchX = source.pitchX,
+                pitchY = source.pitchY,
+                goalX = goalX,
+                goalY = goalY
+            )
         }
     }
 
-    fun dismissPendingEvent() {
-        pendingEvent = null
-    }
+    // ----- Substitutions -----
 
     fun beginSubstitution(playerId: Long) {
         substitutingOut = playerId

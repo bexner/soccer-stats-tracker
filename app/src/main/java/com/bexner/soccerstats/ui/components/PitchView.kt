@@ -53,9 +53,10 @@ private val PitchLine = Color(0x99FFFFFF)
  * Top-down pitch with markers laid over it. Your goal is at the bottom (y = 1f),
  * the opponent's at the top (y = 0f), matching how a lineup gets sketched.
  *
- * Passing [onMarkerMoved] makes the markers draggable. Positions come back
- * normalized and clamped, so callers never deal in pixels. Lineups and the live
- * game screen will reuse this same component.
+ * Passing [onMarkerMoved] makes the markers draggable, and [onPitchTapped]
+ * reports taps on empty grass. Positions come back normalized and clamped, so
+ * callers never deal in pixels. Lineups and the live game screen reuse this
+ * same component.
  */
 @Composable
 fun PitchView(
@@ -64,7 +65,8 @@ fun PitchView(
     markerSize: Dp = 44.dp,
     selectedMarkerId: Long? = null,
     onMarkerMoved: ((id: Long, x: Float, y: Float) -> Unit)? = null,
-    onMarkerTapped: ((id: Long) -> Unit)? = null
+    onMarkerTapped: ((id: Long) -> Unit)? = null,
+    onPitchTapped: ((x: Float, y: Float) -> Unit)? = null
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -75,6 +77,24 @@ fun PitchView(
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val markerPx = with(density) { markerSize.toPx() }
+        val currentOnPitchTapped by rememberUpdatedState(onPitchTapped)
+
+        // Registered before the markers so marker taps, which sit above this in
+        // the layout, still win where they overlap.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(onPitchTapped == null, widthPx, heightPx) {
+                    if (currentOnPitchTapped == null) return@pointerInput
+                    detectTapGestures { offset ->
+                        if (widthPx <= 0f || heightPx <= 0f) return@detectTapGestures
+                        currentOnPitchTapped?.invoke(
+                            (offset.x / widthPx).coerceIn(0f, 1f),
+                            (offset.y / heightPx).coerceIn(0f, 1f)
+                        )
+                    }
+                }
+        )
 
         PitchMarkings()
 

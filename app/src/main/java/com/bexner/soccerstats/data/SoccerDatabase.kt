@@ -272,13 +272,26 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+/**
+ * v4 -> v5 records where an event happened: a normalized pitch position and,
+ * for anything that reached the net, a placement in the goal mouth. All four
+ * columns are nullable — events logged from the quick buttons simply have none.
+ */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        listOf("pitchX", "pitchY", "goalX", "goalY").forEach { column ->
+            db.execSQL("ALTER TABLE `game_events` ADD COLUMN `$column` REAL")
+        }
+    }
+}
+
 @Database(
     entities = [
         Team::class, Player::class, Formation::class, FormationSlot::class,
         Game::class, GameAttendance::class, LineupSlot::class,
         PlayerStint::class, GameEvent::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -301,7 +314,12 @@ abstract class SoccerDatabase : RoomDatabase() {
                     "soccer_stats.db"
                 )
                     // Foreign keys drive cascade deletes of players when a team is removed.
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5
+                    )
                     .build()
                     .also { INSTANCE = it }
             }

@@ -302,7 +302,11 @@ class SoccerRepository(
         type: EventType,
         side: EventSide,
         playerId: Long? = null,
-        secondaryPlayerId: Long? = null
+        secondaryPlayerId: Long? = null,
+        pitchX: Float? = null,
+        pitchY: Float? = null,
+        goalX: Float? = null,
+        goalY: Float? = null
     ) {
         val game = gameDao.getById(gameId) ?: return
         gameDao.insertEvent(
@@ -313,7 +317,11 @@ class SoccerRepository(
                 playerId = playerId,
                 secondaryPlayerId = secondaryPlayerId,
                 period = game.currentPeriod,
-                clockMs = game.elapsedMsAt()
+                clockMs = game.elapsedMsAt(),
+                pitchX = pitchX,
+                pitchY = pitchY,
+                goalX = goalX,
+                goalY = goalY
             )
         )
         if (type == EventType.GOAL) {

@@ -74,6 +74,14 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Substitutions swap a player into the same slot and close out the other's spell
 - Live minutes per player, running timeline, undo on any event
 
+**Two ways to log**
+
+- **Quick buttons** — action, then player. Two taps, for when position doesn't matter.
+- **Tap the pitch** — position, then action, then player. Three taps, but records *where* it
+  happened. Previously logged events stay on the pitch as markers.
+- Goals, shots on target and saves then offer a **goal-mouth view**: tap where it finished. Always
+  skippable.
+
 ---
 
 ## Project layout
@@ -137,6 +145,21 @@ Slot `x` / `y` are normalized `0f..1f` so a shape renders identically on any scr
 your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 0.93f`, strikers near
 `y = 0.18f`. Anything reading or writing slot positions must respect that.
 
+### Event coordinates
+
+`game_events` carries two optional coordinate pairs, both normalized `0f..1f`:
+
+- **`pitchX` / `pitchY`** — where on the field. Always stored with **your attacking direction
+  upward**, regardless of which end you're actually defending, so positions stay comparable across
+  halves and across games. Derived third is exposed as `GameEvent.pitchThird`.
+- **`goalX` / `goalY`** — where it finished in the net. Normalized against the **goal frame**, not
+  the view: `x = 0f` is the left post, `y = 0f` the crossbar. `GameEvent.goalZone` turns that into a
+  nine-box name like "Top left".
+
+The nine-box guides drawn in `GoalMouthView` sit at exactly the thresholds `goalZone` uses, so what
+you tap and what gets labelled can't drift apart. All four columns are nullable — events logged from
+the quick buttons simply have none, and every stat over them must tolerate that.
+
 ### Slot indexes are the contract
 
 A lineup binds a player to a **`slotIndex`**, not to a marker label. That is what lets one lineup
@@ -163,13 +186,14 @@ minutes can be sliced by position after the fact.
 
 ### Migrations
 
-Database is at **version 4**.
+Database is at **version 5**.
 
 - `MIGRATION_1_2` adds the two formation tables, leaving teams and rosters untouched.
 - `MIGRATION_2_3` adds `phase` to `formation_slots`, defaulting existing rows to `DEFENDING` —
   which is what a single-shape formation always meant.
 - `MIGRATION_3_4` adds `games`, `game_attendance`, `lineup_slots`, `player_stints` and
   `game_events`. Purely additive.
+- `MIGRATION_4_5` adds the four nullable coordinate columns to `game_events`.
 
 Each future feature needs a version bump and a migration in `SoccerDatabase.kt`. Note that Room
 validates migrations at runtime, not compile time — CI going green does **not** prove a migration is
@@ -198,7 +222,8 @@ any malformed shape to Logcat under the `SoccerStats` tag.
 ## Next steps, in build order
 
 1. **Stats screens** — season and per-game aggregates: minutes by player and by position, goals,
-   shots, duel win rates. All the raw material is already being recorded.
+   shots, duel win rates, plus shot maps and goal-placement charts now that coordinates are being
+   captured. All the raw material is already being recorded.
 2. **Excel export** — Apache POI or a CSV writer, shared via `FileProvider`. The original point of
    the app.
 3. **Calendar sync** — push games to the device calendar.

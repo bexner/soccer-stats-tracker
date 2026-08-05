@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,12 +49,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bexner.soccerstats.data.entity.GameEvent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bexner.soccerstats.data.entity.EventSide
 import com.bexner.soccerstats.data.entity.EventType
 import com.bexner.soccerstats.data.entity.GameStatus
+import androidx.compose.ui.graphics.Color
 import com.bexner.soccerstats.ui.AppViewModelProvider
+import com.bexner.soccerstats.ui.components.GoalMark
+import com.bexner.soccerstats.ui.components.GoalMouthView
+import com.bexner.soccerstats.ui.components.PitchMarker
+import com.bexner.soccerstats.ui.components.PitchView
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -168,16 +175,59 @@ fun LiveGameScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // ---- Event buttons ----
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EventType.loggable.forEach { type ->
-                    FilledTonalButton(onClick = { viewModel.onEventTapped(type) }) {
-                        Text(type.label)
+            // ---- Entry mode ----
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                EntryMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = viewModel.entryMode == mode,
+                        onClick = { viewModel.onEntryModeChange(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = EntryMode.entries.size
+                        ),
+                        label = { Text(mode.label) }
+                    )
+                }
+            }
+
+            if (viewModel.entryMode == EntryMode.QUICK) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    EventType.loggable.forEach { type ->
+                        FilledTonalButton(onClick = { viewModel.onEventTapped(type) }) {
+                            Text(type.label)
+                        }
                     }
                 }
+            } else {
+                Text(
+                    text = "Tap where it happened. You're always attacking upward, whichever " +
+                        "end you're actually playing.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                PitchView(
+                    markers = uiState.positionedEvents.take(40).map { event ->
+                        PitchMarker(
+                            id = event.id,
+                            x = event.pitchX ?: 0.5f,
+                            y = event.pitchY ?: 0.5f,
+                            label = event.type.short,
+                            color = if (event.side == EventSide.US) {
+                                Color(0xFF1565C0)
+                            } else {
+                                Color(0xFFC62828)
+                            }
+                        )
+                    },
+                    markerSize = 26.dp,
+                    onPitchTapped = { x, y -> viewModel.onPitchTapped(x, y) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(0.66f)
+                )
             }
 
             HorizontalDivider()
@@ -253,6 +303,8 @@ fun LiveGameScreen(
                                 uiState.player(event.secondaryPlayerId)?.let {
                                     append(" ▸ ${it.fullName}")
                                 }
+                                event.goalZone?.let { append("  [$it]") }
+                                event.pitchThird?.let { append("  · $it") }
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
@@ -271,35 +323,105 @@ fun LiveGameScreen(
         }
     }
 
-    // ---- Who did it? ----
-    viewModel.pendingEvent?.let { pending ->
-        AlertDialog(
-            onDismissRequest = viewModel::dismissPendingEvent,
-            title = { Text("${pending.type.label} — who?") },
-            text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                    items(uiState.onPitch, key = { it.id }) { stint ->
-                        val player = uiState.player(stint.playerId)
+    // ---- Event wizard: action, then player, then placement ----
+    val draft = viewModel.draft
+    when (viewModel.stage) {
+        DraftStage.PICK_ACTION -> {
+            AlertDialog(
+                onDismissRequest = viewModel::cancelDraft,
+                title = { Text("What happened?") },
+                text = {
+                    Column(
+                        modifier = Modifier.heightIn(max = 400.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        draft?.pitchThirdLabel()?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            EventType.loggable.forEach { type ->
+                                FilledTonalButton(onClick = { viewModel.onActionChosen(type) }) {
+                                    Text(type.label)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = viewModel::cancelDraft) { Text("Cancel") }
+                }
+            )
+        }
+
+        DraftStage.PICK_PLAYER -> {
+            AlertDialog(
+                onDismissRequest = viewModel::cancelDraft,
+                title = { Text("${draft?.type?.label ?: "Event"} — who?") },
+                text = {
+                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                        items(uiState.onPitch, key = { it.id }) { stint ->
+                            val player = uiState.player(stint.playerId)
+                            Text(
+                                text = "${player?.displayNumber ?: "-"}  ${player?.fullName ?: ""}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.onPlayerChosen(stint.playerId) }
+                                    .padding(vertical = 12.dp)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.onPlayerChosen(null) }) {
+                        Text("Skip player")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::cancelDraft) { Text("Cancel") }
+                }
+            )
+        }
+
+        DraftStage.PICK_PLACEMENT -> {
+            AlertDialog(
+                onDismissRequest = viewModel::cancelDraft,
+                title = { Text("Where in the goal?") },
+                text = {
+                    Column {
                         Text(
-                            text = "${player?.displayNumber ?: "-"}  ${player?.fullName ?: ""}",
-                            style = MaterialTheme.typography.bodyLarge,
+                            text = "Tap the spot. Skip if you didn't see it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        GoalMouthView(
+                            onTap = { gx, gy -> viewModel.onPlacementChosen(gx, gy) },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { viewModel.confirmPendingEvent(stint.playerId) }
-                                .padding(vertical = 12.dp)
+                                .aspectRatio(1.6f)
                         )
                     }
+                },
+                confirmButton = {
+                    TextButton(onClick = viewModel::skipPlacement) { Text("Skip") }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::cancelDraft) { Text("Cancel") }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmPendingEvent(null) }) {
-                    Text("Skip player")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissPendingEvent) { Text("Cancel") }
-            }
-        )
+            )
+        }
+
+        null -> Unit
     }
 
     // ---- Substitution ----
