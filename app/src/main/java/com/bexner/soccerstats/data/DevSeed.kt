@@ -72,11 +72,14 @@ object DevSeed {
                 mid("10", 0.50f, 0.34f),
                 fwd("9", 0.50f, 0.14f)
             ),
+            // Same shirt-number order as the defending shape, so slot N is the
+            // same player in both phases.
             attacking = listOf(
                 gk(),
                 def("5", 0.35f, 0.76f), def("4", 0.65f, 0.76f),
-                mid("8", 0.38f, 0.56f), mid("6", 0.62f, 0.56f),
-                mid("11", 0.12f, 0.34f), mid("10", 0.50f, 0.36f), mid("7", 0.88f, 0.34f),
+                mid("11", 0.12f, 0.34f), mid("8", 0.38f, 0.56f),
+                mid("6", 0.62f, 0.56f), mid("7", 0.88f, 0.34f),
+                mid("10", 0.50f, 0.36f),
                 fwd("9", 0.50f, 0.14f)
             )
         ),
@@ -100,7 +103,7 @@ object DevSeed {
                 gk(),
                 def("5", 0.35f, 0.76f), def("4", 0.65f, 0.76f),
                 mid("8", 0.25f, 0.50f), mid("10", 0.50f, 0.50f), mid("6", 0.75f, 0.50f),
-                fwd("11", 0.15f, 0.18f), fwd("9", 0.50f, 0.13f), fwd("7", 0.85f, 0.18f)
+                fwd("11", 0.15f, 0.18f), fwd("7", 0.85f, 0.18f), fwd("9", 0.50f, 0.13f)
             )
         ),
 
@@ -167,9 +170,28 @@ object DevSeed {
             )
         }
 
-    /** Catches a spec that doesn't add up to a full 9v9 side. */
+    /**
+     * Catches a spec that doesn't add up to a full 9v9 side, or whose two shapes
+     * disagree slot-for-slot. That second check matters: a lineup binds a player
+     * to a slot index, so slot 4 must be the same shirt number in both phases or
+     * toggling phase would silently move players around.
+     */
     fun validate(): List<String> = systems.flatMap { spec ->
-        listOf(ShapePhase.DEFENDING to spec.defending, ShapePhase.ATTACKING to spec.attacking)
+        val orderMismatch = spec.defending.map { it.number } != spec.attacking.map { it.number }
+        val orderProblem = if (orderMismatch) {
+            listOf(
+                "${spec.name}: shirt order differs between phases — " +
+                    "defending ${spec.defending.map { it.number }}, " +
+                    "attacking ${spec.attacking.map { it.number }}"
+            )
+        } else {
+            emptyList()
+        }
+
+        orderProblem + listOf(
+            ShapePhase.DEFENDING to spec.defending,
+            ShapePhase.ATTACKING to spec.attacking
+        )
             .mapNotNull { (phase, spots) ->
                 val keepers = spots.count { it.role == Position.GOALKEEPER }
                 val numbers = spots.map { it.number }

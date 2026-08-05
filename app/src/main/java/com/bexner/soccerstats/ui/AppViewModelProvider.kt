@@ -7,6 +7,11 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.bexner.soccerstats.SoccerStatsApplication
 import com.bexner.soccerstats.ui.formations.FormationEditViewModel
+import com.bexner.soccerstats.ui.games.GameDetailViewModel
+import com.bexner.soccerstats.ui.games.GameEditViewModel
+import com.bexner.soccerstats.ui.games.GameListViewModel
+import com.bexner.soccerstats.ui.games.LineupViewModel
+import com.bexner.soccerstats.ui.games.LiveGameViewModel
 import com.bexner.soccerstats.ui.formations.FormationListViewModel
 import com.bexner.soccerstats.ui.roster.PlayerEditViewModel
 import com.bexner.soccerstats.ui.roster.RosterViewModel
@@ -22,6 +27,11 @@ object AppViewModelProvider {
         initializer { PlayerEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
         initializer { FormationListViewModel(soccerApplication().repository) }
         initializer { FormationEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { GameListViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { GameEditViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { GameDetailViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { LineupViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { LiveGameViewModel(createSavedStateHandle(), soccerApplication().repository) }
     }
 }
 

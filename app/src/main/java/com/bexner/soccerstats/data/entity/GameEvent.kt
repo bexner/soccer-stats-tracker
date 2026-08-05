@@ -1,0 +1,99 @@
+package com.bexner.soccerstats.data.entity
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+/** Which side an event belongs to. */
+enum class EventSide(val label: String) {
+    US("Us"),
+    THEM("Them");
+
+    companion object {
+        val all: List<EventSide> = entries.toList()
+        fun fromName(value: String): EventSide =
+            runCatching { valueOf(value) }.getOrDefault(US)
+    }
+}
+
+/**
+ * Everything the live screen can record.
+ *
+ * [attributable] marks events where naming a player is meaningful — the live
+ * screen prompts for one on those and skips the prompt otherwise, which keeps
+ * taps down while a game is actually happening.
+ */
+enum class EventType(
+    val label: String,
+    val short: String,
+    val attributable: Boolean = true
+) {
+    GOAL("Goal", "GOAL"),
+    ASSIST("Assist", "AST"),
+    SHOT_ON("Shot on target", "SOT"),
+    SHOT_OFF("Shot off target", "SHOT"),
+    SAVE("Save", "SAVE"),
+    CORNER("Corner", "CK", attributable = false),
+    FREE_KICK("Free kick", "FK", attributable = false),
+    FOUL("Foul", "FOUL"),
+    TACKLE("Tackle won", "TKL"),
+    FIFTY_FIFTY("50/50 won", "50/50"),
+    OFFSIDE("Offside", "OFF"),
+    YELLOW_CARD("Yellow card", "YC"),
+    RED_CARD("Red card", "RC"),
+    SUBSTITUTION("Substitution", "SUB"),
+    PERIOD_START("Period start", "START", attributable = false),
+    PERIOD_END("Period end", "END", attributable = false);
+
+    companion object {
+        /** Buttons offered on the live screen, in tap-frequency order. */
+        val loggable: List<EventType> = listOf(
+            GOAL, SHOT_ON, SHOT_OFF, SAVE, CORNER, FREE_KICK,
+            TACKLE, FIFTY_FIFTY, FOUL, OFFSIDE, YELLOW_CARD, RED_CARD
+        )
+
+        fun fromName(value: String): EventType =
+            runCatching { valueOf(value) }.getOrDefault(GOAL)
+    }
+}
+
+@Entity(
+    tableName = "game_events",
+    foreignKeys = [
+        ForeignKey(
+            entity = Game::class,
+            parentColumns = ["id"],
+            childColumns = ["gameId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("gameId"), Index(value = ["gameId", "clockMs"])]
+)
+data class GameEvent(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val gameId: Long,
+    val type: EventType,
+    val side: EventSide = EventSide.US,
+    /**
+     * Player credited. Nullable rather than a foreign key on purpose — opponent
+     * events have no player of ours, and deleting a player shouldn't erase the
+     * fact that a goal was scored.
+     */
+    val playerId: Long? = null,
+    /** Second player, for assists on a goal or the incoming player on a sub. */
+    val secondaryPlayerId: Long? = null,
+    val period: Int = 1,
+    /** Match elapsed ms when it happened. */
+    val clockMs: Long,
+    val note: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+) {
+    /** mm:ss as it would read on the match clock. */
+    val clockLabel: String
+        get() {
+            val totalSeconds = clockMs / 1000
+            return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+        }
+}

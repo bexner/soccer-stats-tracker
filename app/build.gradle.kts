@@ -53,6 +53,9 @@ android {
 
     buildFeatures {
         compose = true
+        // AGP 8 stopped generating BuildConfig by default. DevSeed is gated on
+        // BuildConfig.DEBUG, so the class has to exist.
+        buildConfig = true
     }
 
     packaging {

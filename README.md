@@ -1,6 +1,7 @@
 # Soccer Stats Tracker — Android
 
-Youth soccer stat tracking. **Built so far: teams, rosters, and the formation library.**
+Youth soccer stat tracking. **Built so far: teams, rosters, formations, games, lineups and live
+match tracking.**
 
 Kotlin · Jetpack Compose (Material 3) · Room (local-only, works with no signal) · minSdk 26
 
@@ -51,6 +52,28 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Duplicate any formation (editing a built-in one silently forks it, so presets stay intact)
 - Presets reappear if you ever delete every formation in the library
 
+**Games**
+
+- Schedule per team, split into Upcoming and Played
+- Opponent, home/away/neutral, date and time pickers, optional location, minutes per half
+- Per-player attendance: Yes / Maybe / No, with a "rest are in" shortcut
+
+**Lineups**
+
+- Pick any formation, tap a position, assign from the available (Yes/Maybe) pool
+- Auto-fill matches players to slots by their usual position
+- Bench is whoever's available and unassigned
+- One lineup covers both the defending and attacking shape
+
+**Live match**
+
+- Two-half clock with kick off / stop / resume and end half
+- Event buttons for goals, shots on and off, saves, corners, free kicks, tackles, 50/50s, fouls,
+  offsides and cards — each taggable as **us** or **them**
+- Our events prompt for the player; opponent events are a single tap
+- Substitutions swap a player into the same slot and close out the other's spell
+- Live minutes per player, running timeline, undo on any event
+
 ---
 
 ## Project layout
@@ -60,9 +83,10 @@ app/src/main/java/com/bexner/soccerstats/
 ├── SoccerStatsApplication.kt      Manual DI container (holds the repository)
 ├── MainActivity.kt                Compose entry point
 ├── data/
-│   ├── entity/                    Team, Player, Position, MatchFormat,
-│   │                              Formation, FormationSlot, + relation POJOs
-│   ├── dao/                       TeamDao, PlayerDao, FormationDao
+│   ├── entity/                    Team, Player, Position, MatchFormat, Formation,
+│   │                              FormationSlot, Game, GameAttendance, LineupSlot,
+│   │                              PlayerStint, GameEvent, + relation POJOs
+│   ├── dao/                       TeamDao, PlayerDao, FormationDao, GameDao
 │   ├── FormationPresets.kt        The 19 built-in shapes
 │   ├── DevSeed.kt                 Debug-only real team/roster/systems
 │   ├── SoccerDatabase.kt          Room database, converters, migrations
@@ -74,7 +98,9 @@ app/src/main/java/com/bexner/soccerstats/
     ├── components/PitchView.kt    Reusable draggable pitch canvas
     ├── teams/                     TeamListScreen, TeamEditScreen (+ ViewModels)
     ├── roster/                    RosterScreen, PlayerEditScreen (+ ViewModels)
-    └── formations/                FormationListScreen, FormationEditScreen (+ ViewModels)
+    ├── formations/                FormationListScreen, FormationEditScreen (+ ViewModels)
+    └── games/                     GameList, GameEdit, GameDetail, Attendance,
+                                   Lineup, LiveGame (+ ViewModels)
 ```
 
 **Why it's shaped this way:** screens only ever talk to `SoccerRepository`, never to DAOs. Schedules
@@ -109,15 +135,41 @@ phase to get one. `slotIndex` restarts at 0 per phase.
 
 Slot `x` / `y` are normalized `0f..1f` so a shape renders identically on any screen. **`y = 1f` is
 your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 0.93f`, strikers near
-`y = 0.18f`. Anything reading or writing slot positions must respect that, including lineups later.
+`y = 0.18f`. Anything reading or writing slot positions must respect that.
+
+### Slot indexes are the contract
+
+A lineup binds a player to a **`slotIndex`**, not to a marker label. That is what lets one lineup
+serve both shapes: slot 4 must be the same player whether you're looking at the defending or
+attacking view. Both phases of a formation therefore have to list the same positions in the same
+order — `DevSeed.validate()` enforces it and logs a loud error if a hand-written shape breaks it.
+
+### Match time
+
+Two clocks, deliberately kept apart:
+
+- **Wall clock** — `clockRunningSince` holds the real timestamp of the last start.
+- **Match time** — `clockElapsedMs` is running time already banked. Live match time is
+  `clockElapsedMs + (now - clockRunningSince)`.
+
+Both live on the `games` row, so locking the phone, rotating, or having the app killed mid-match
+loses nothing. Every event timestamp and every substitution is recorded in **match** time, so a long
+halftime or an injury stoppage never inflates anyone's minutes.
+
+`player_stints` is what makes minutes computable: one row per continuous spell, holding the player,
+the slot, and on/off match times. Substituting closes the outgoing row and opens one for the
+replacement at the same instant — so total player minutes always equal *positions × elapsed*, and
+minutes can be sliced by position after the fact.
 
 ### Migrations
 
-Database is at **version 3**.
+Database is at **version 4**.
 
 - `MIGRATION_1_2` adds the two formation tables, leaving teams and rosters untouched.
 - `MIGRATION_2_3` adds `phase` to `formation_slots`, defaulting existing rows to `DEFENDING` —
   which is what a single-shape formation always meant.
+- `MIGRATION_3_4` adds `games`, `game_attendance`, `lineup_slots`, `player_stints` and
+  `game_events`. Purely additive.
 
 Each future feature needs a version bump and a migration in `SoccerDatabase.kt`. Note that Room
 validates migrations at runtime, not compile time — CI going green does **not** prove a migration is
@@ -145,13 +197,14 @@ any malformed shape to Logcat under the `SoccerStats` tag.
 
 ## Next steps, in build order
 
-1. **Lineups** — bind real players to a formation's slots, saved per team so a starting XI can be
-   reused week to week. This is the payoff for the formation library.
-2. **Schedules** — `Game` entity (opponent, kickoff time, home/away, location) tied to a team, with a
-   lineup attached to each game
-3. **Live stat tracking** — the big one: an in-game screen with large tap targets for goals, assists,
-   shots, saves, fouls, cards, plus substitution and minutes-played timing
-4. **Excel export** — Apache POI or a CSV writer, sharing via `FileProvider`
+1. **Stats screens** — season and per-game aggregates: minutes by player and by position, goals,
+   shots, duel win rates. All the raw material is already being recorded.
+2. **Excel export** — Apache POI or a CSV writer, shared via `FileProvider`. The original point of
+   the app.
+3. **Calendar sync** — push games to the device calendar.
+4. **Live screen polish** — the event grid is functional but untested under real conditions. Expect
+   to move buttons around after the first game you actually track from the sideline.
 
-The hardest design decision is #3 — how many taps it takes to record an event while you're actually
-coaching. Worth sketching that screen before writing it.
+The honest risk in #4 is tap count. Logging an opponent corner is one tap; logging a tackle by one of
+yours is two. Whether that holds up while you're also coaching is something only a real match will
+tell us.

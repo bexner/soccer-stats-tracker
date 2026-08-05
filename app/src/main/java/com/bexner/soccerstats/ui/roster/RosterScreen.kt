@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
@@ -62,6 +63,7 @@ import com.bexner.soccerstats.ui.AppViewModelProvider
 fun RosterScreen(
     onBack: () -> Unit,
     onEditTeam: () -> Unit,
+    onOpenSchedule: () -> Unit,
     onAddPlayer: () -> Unit,
     onEditPlayer: (Long) -> Unit,
     onTeamDeleted: () -> Unit,
@@ -93,6 +95,9 @@ fun RosterScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenSchedule) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = "Schedule")
+                    }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Team options")
                     }

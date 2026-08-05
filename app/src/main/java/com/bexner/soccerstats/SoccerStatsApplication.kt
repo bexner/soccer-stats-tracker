@@ -21,7 +21,7 @@ class SoccerStatsApplication : Application() {
 
     val repository: SoccerRepository by lazy {
         val db = SoccerDatabase.getInstance(this)
-        SoccerRepository(db.teamDao(), db.playerDao(), db.formationDao())
+        SoccerRepository(db.teamDao(), db.playerDao(), db.formationDao(), db.gameDao())
     }
 
     override fun onCreate() {

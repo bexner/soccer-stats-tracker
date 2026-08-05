@@ -148,12 +148,16 @@ class FormationEditViewModel(
         )
     }
 
+    /**
+     * Labels identify the player slot (usually a shirt number), so they apply to
+     * both shapes. Roles do not — a winger can tuck into midfield out of
+     * possession and push high in it.
+     */
     fun onSelectedLabelChange(label: String) {
         val index = state.selectedSlotIndex ?: return
-        val phase = state.phase
         state = state.copy(
             slots = state.slots.map {
-                if (it.phase == phase && it.slotIndex == index) it.copy(label = label.take(4)) else it
+                if (it.slotIndex == index) it.copy(label = label.take(4)) else it
             }
         )
     }
