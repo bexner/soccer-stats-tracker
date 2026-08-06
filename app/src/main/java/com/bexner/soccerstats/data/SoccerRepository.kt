@@ -332,6 +332,16 @@ class SoccerRepository(
         }
     }
 
+    // ----- Stats sources -----
+
+    /** Every game for a team that has actually been played, newest last. */
+    suspend fun playedGames(teamId: Long): List<Game> =
+        gameDao.gamesForStats(teamId)
+
+    suspend fun stintsFor(gameId: Long): List<PlayerStint> = gameDao.stintsForGame(gameId)
+
+    suspend fun eventsFor(gameId: Long): List<GameEvent> = gameDao.eventsForGame(gameId)
+
     /** Removes an event, undoing its effect on the score. */
     suspend fun deleteEvent(event: GameEvent) {
         gameDao.deleteEvent(event)

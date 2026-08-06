@@ -1,7 +1,7 @@
 # Soccer Stats Tracker — Android
 
-Youth soccer stat tracking. **Built so far: teams, rosters, formations, games, lineups and live
-match tracking.**
+Youth soccer stat tracking. **Feature complete for a season: teams, rosters, formations, games,
+lineups, live match tracking, stats and Excel export.**
 
 Kotlin · Jetpack Compose (Material 3) · Room (local-only, works with no signal) · minSdk 26
 
@@ -82,6 +82,20 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Goals, shots on target and saves then offer a **goal-mouth view**: tap where it finished. Always
   skippable.
 
+**Stats**
+
+- Per-game breakdown and season totals, toggled on one screen
+- Team table: goals, shots, on target, corners, fouls, saves — for and against
+- Player table: games, minutes, goals, assists, shots, on target, tackles, 50/50s
+- Minutes by position across the season
+- Shot map on the pitch and goal-placement chart, from the coordinates captured live
+
+**Export**
+
+- One-tap share to a multi-sheet **.xlsx** — Summary, Players, Minutes by position, Events
+- Season export adds a Games sheet and every event from every game
+- Written to the app cache and shared through a `FileProvider`, so no storage permission is needed
+
 ---
 
 ## Project layout
@@ -99,6 +113,11 @@ app/src/main/java/com/bexner/soccerstats/
 │   ├── DevSeed.kt                 Debug-only real team/roster/systems
 │   ├── SoccerDatabase.kt          Room database, converters, migrations
 │   └── SoccerRepository.kt        Single data entry point for the UI
+├── stats/
+│   ├── StatsModels.kt             PlayerStats, TeamTotals, GameStats, SeasonStats
+│   │                              and the pure StatsCalculator
+│   ├── XlsxWriter.kt              Dependency-free multi-sheet .xlsx writer
+│   └── StatsExporter.kt           Workbook assembly + share sheet
 └── ui/
     ├── AppViewModelProvider.kt    ViewModel factory
     ├── theme/                     Material 3 pitch-green theme
@@ -107,8 +126,9 @@ app/src/main/java/com/bexner/soccerstats/
     ├── teams/                     TeamListScreen, TeamEditScreen (+ ViewModels)
     ├── roster/                    RosterScreen, PlayerEditScreen (+ ViewModels)
     ├── formations/                FormationListScreen, FormationEditScreen (+ ViewModels)
-    └── games/                     GameList, GameEdit, GameDetail, Attendance,
-                                   Lineup, LiveGame (+ ViewModels)
+    ├── games/                     GameList, GameEdit, GameDetail, Attendance,
+    │                              Lineup, LiveGame (+ ViewModels)
+    └── stats/                     StatsScreen (+ ViewModel)
 ```
 
 **Why it's shaped this way:** screens only ever talk to `SoccerRepository`, never to DAOs. Schedules
@@ -184,6 +204,23 @@ the slot, and on/off match times. Substituting closes the outgoing row and opens
 replacement at the same instant — so total player minutes always equal *positions × elapsed*, and
 minutes can be sliced by position after the fact.
 
+### Why the .xlsx is hand-written
+
+Apache POI is the obvious choice and the wrong one here: it's a large dependency that reaches for
+`java.awt` classes Android doesn't ship, and it takes real work to make it behave. An `.xlsx` is just
+a zip of XML parts, and the subset needed for plain tables is small — so `XlsxWriter` emits that
+subset directly. No dependency, no method-count pressure, a few hundred lines.
+
+Strings are written inline rather than through a shared string table: slightly larger files, far less
+to get wrong. Numbers are written as numbers so Excel can sum them, and whole numbers lose the
+trailing `.0`. Control characters below `0x20` are stripped, since they're illegal in XML 1.0 and one
+stray character would make the entire workbook unopenable.
+
+**Verification approach:** the format was checked by rebuilding a workbook from `XlsxWriter`'s own
+XML string constants in Python and opening it with `openpyxl`. That confirmed sheet structure, header
+styling, int/float typing, blank cells, and escaping of `&`, `<`, `>` and quotes. It does *not*
+prove the Kotlin runs — only CI and your phone can do that.
+
 ### Migrations
 
 Database is at **version 5**.
@@ -231,5 +268,8 @@ any malformed shape to Logcat under the `SoccerStats` tag.
    to move buttons around after the first game you actually track from the sideline.
 
 The honest risk in #4 is tap count. Logging an opponent corner is one tap; logging a tackle by one of
-yours is two. Whether that holds up while you're also coaching is something only a real match will
-tell us.
+yours is two, and a positioned shot with placement is four. Whether that holds up while you're also
+coaching is something only a real match will tell us.
+
+Everything through the export is now built. The next real information comes from using it at a game,
+not from adding features.

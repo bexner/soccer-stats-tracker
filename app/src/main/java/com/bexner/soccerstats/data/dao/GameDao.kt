@@ -40,6 +40,22 @@ interface GameDao {
     @Query("SELECT * FROM games WHERE id = :gameId")
     suspend fun getById(gameId: Long): Game?
 
+    /** Games worth aggregating: anything past the scheduled stage. */
+    @Query(
+        """
+        SELECT * FROM games
+        WHERE teamId = :teamId AND status IN ('IN_PROGRESS','FINAL')
+        ORDER BY kickoffAt ASC
+        """
+    )
+    suspend fun gamesForStats(teamId: Long): List<Game>
+
+    @Query("SELECT * FROM player_stints WHERE gameId = :gameId ORDER BY onAtMs ASC")
+    suspend fun stintsForGame(gameId: Long): List<PlayerStint>
+
+    @Query("SELECT * FROM game_events WHERE gameId = :gameId ORDER BY clockMs ASC")
+    suspend fun eventsForGame(gameId: Long): List<GameEvent>
+
     @Insert
     suspend fun insert(game: Game): Long
 

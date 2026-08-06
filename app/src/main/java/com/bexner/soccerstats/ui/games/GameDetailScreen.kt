@@ -43,6 +43,7 @@ fun GameDetailScreen(
     onAttendance: () -> Unit,
     onLineup: () -> Unit,
     onLive: () -> Unit,
+    onStats: () -> Unit,
     viewModel: GameDetailViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -120,6 +121,12 @@ fun GameDetailScreen(
                     "${uiState.lineup.size} positions filled"
                 },
                 onClick = onLineup
+            )
+
+            StepCard(
+                title = "Stats",
+                subtitle = "Breakdown for this game, and season totals",
+                onClick = onStats
             )
 
             Button(

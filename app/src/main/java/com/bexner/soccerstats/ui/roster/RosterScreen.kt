@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
@@ -64,6 +65,7 @@ fun RosterScreen(
     onBack: () -> Unit,
     onEditTeam: () -> Unit,
     onOpenSchedule: () -> Unit,
+    onOpenStats: () -> Unit,
     onAddPlayer: () -> Unit,
     onEditPlayer: (Long) -> Unit,
     onTeamDeleted: () -> Unit,
@@ -97,6 +99,9 @@ fun RosterScreen(
                 actions = {
                     IconButton(onClick = onOpenSchedule) {
                         Icon(Icons.Default.CalendarMonth, contentDescription = "Schedule")
+                    }
+                    IconButton(onClick = onOpenStats) {
+                        Icon(Icons.Default.BarChart, contentDescription = "Stats")
                     }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Team options")

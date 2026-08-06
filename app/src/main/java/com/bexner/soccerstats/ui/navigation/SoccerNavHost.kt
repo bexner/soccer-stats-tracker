@@ -14,6 +14,7 @@ import com.bexner.soccerstats.ui.games.GameEditScreen
 import com.bexner.soccerstats.ui.games.GameListScreen
 import com.bexner.soccerstats.ui.games.LineupScreen
 import com.bexner.soccerstats.ui.games.LiveGameScreen
+import com.bexner.soccerstats.ui.stats.StatsScreen
 import com.bexner.soccerstats.ui.formations.FormationListScreen
 import com.bexner.soccerstats.ui.roster.PlayerEditScreen
 import com.bexner.soccerstats.ui.roster.RosterScreen
@@ -65,6 +66,12 @@ object Routes {
     const val GAME_LIVE = "games/{$GAME_ID_ARG}/live"
     fun gameLive(gameId: Long) = "games/$gameId/live"
 
+    const val GAME_STATS = "games/{$GAME_ID_ARG}/stats"
+    fun gameStats(gameId: Long) = "games/$gameId/stats"
+
+    const val TEAM_STATS = "teams/{$TEAM_ID_ARG}/stats"
+    fun teamStats(teamId: Long) = "teams/$teamId/stats"
+
     const val FORMATION_ID_ARG = "formationId"
     const val FORMAT_ARG = "format"
 
@@ -107,6 +114,7 @@ fun SoccerNavHost(
                 onEditTeam = { navController.navigate(Routes.teamEdit(teamId)) },
                 onAddPlayer = { navController.navigate(Routes.playerEdit(teamId)) },
                 onOpenSchedule = { navController.navigate(Routes.gameList(teamId)) },
+                onOpenStats = { navController.navigate(Routes.teamStats(teamId)) },
                 onEditPlayer = { playerId -> navController.navigate(Routes.playerEdit(teamId, playerId)) },
                 onTeamDeleted = {
                     navController.popBackStack(Routes.TEAM_LIST, inclusive = false)
@@ -162,7 +170,8 @@ fun SoccerNavHost(
                 },
                 onAttendance = { navController.navigate(Routes.gameAttendance(gameId)) },
                 onLineup = { navController.navigate(Routes.gameLineup(gameId)) },
-                onLive = { navController.navigate(Routes.gameLive(gameId)) }
+                onLive = { navController.navigate(Routes.gameLive(gameId)) },
+                onStats = { navController.navigate(Routes.gameStats(gameId)) }
             )
         }
 
@@ -174,6 +183,20 @@ fun SoccerNavHost(
                 onCancel = { navController.popBackStack() },
                 onDone = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            route = Routes.GAME_STATS,
+            arguments = listOf(navArgument(Routes.GAME_ID_ARG) { type = NavType.LongType })
+        ) {
+            StatsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(
+            route = Routes.TEAM_STATS,
+            arguments = listOf(navArgument(Routes.TEAM_ID_ARG) { type = NavType.LongType })
+        ) {
+            StatsScreen(onBack = { navController.popBackStack() })
         }
 
         composable(

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Exports live in the cache so the OS can reclaim them; the share sheet
+         reads them through the provider rather than needing storage permission. -->
+    <cache-path name="exports" path="exports/" />
+</paths>
