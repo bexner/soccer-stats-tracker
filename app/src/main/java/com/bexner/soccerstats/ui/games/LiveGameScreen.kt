@@ -49,7 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bexner.soccerstats.data.entity.GameEvent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bexner.soccerstats.data.entity.EventSide
@@ -250,9 +249,20 @@ fun LiveGameScreen(
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Position first, then shirt number and name: on the
+                        // sideline you look for "who's at 6", not for a name.
                         Text(
-                            text = "${player?.displayNumber ?: "-"}  ${player?.fullName ?: "Unknown"}",
+                            text = uiState.slotLabel(stint.slotIndex),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.width(30.dp)
+                        )
+                        Text(
+                            text = "#${player?.displayNumber ?: "-"}  ${player?.fullName ?: "Unknown"}",
                             style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
                             modifier = Modifier.weight(1f)
                         )
                         Text(
@@ -371,7 +381,8 @@ fun LiveGameScreen(
                         items(uiState.onPitch, key = { it.id }) { stint ->
                             val player = uiState.player(stint.playerId)
                             Text(
-                                text = "${player?.displayNumber ?: "-"}  ${player?.fullName ?: ""}",
+                                text = "${uiState.slotLabel(stint.slotIndex)}  ·  " +
+                                    "#${player?.displayNumber ?: "-"}  ${player?.fullName ?: ""}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -429,7 +440,13 @@ fun LiveGameScreen(
         val outPlayer = uiState.player(outId)
         AlertDialog(
             onDismissRequest = viewModel::cancelSubstitution,
-            title = { Text("Who comes on for ${outPlayer?.firstName ?: "this player"}?") },
+            title = {
+                val slot = uiState.onPitch.firstOrNull { it.playerId == outId }
+                Text(
+                    "Who plays ${slot?.let { uiState.slotLabel(it.slotIndex) } ?: "this position"} " +
+                        "for ${outPlayer?.firstName ?: "this player"}?"
+                )
+            },
             text = {
                 if (uiState.bench.isEmpty()) {
                     Text("Nobody is on the bench.")

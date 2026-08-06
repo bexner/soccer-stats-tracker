@@ -13,6 +13,8 @@ import com.bexner.soccerstats.data.entity.Game
 import com.bexner.soccerstats.data.entity.GameEvent
 import com.bexner.soccerstats.data.entity.Player
 import com.bexner.soccerstats.data.entity.PlayerStint
+import com.bexner.soccerstats.data.entity.Position
+import com.bexner.soccerstats.data.entity.ShapePhase
 import com.bexner.soccerstats.ui.navigation.Routes
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -31,6 +33,8 @@ data class LiveGameUiState(
     val players: List<Player> = emptyList(),
     val stints: List<PlayerStint> = emptyList(),
     val events: List<GameEvent> = emptyList(),
+    /** slotIndex -> the shirt-position label from the formation, e.g. "1", "9". */
+    val slotLabels: Map<Int, String> = emptyMap(),
     val isLoading: Boolean = true
 ) {
     private val playersById: Map<Long, Player> get() = players.associateBy { it.id }
@@ -51,6 +55,17 @@ data class LiveGameUiState(
 
     /** Events that carry a pitch position, for the overlay. */
     val positionedEvents: List<GameEvent> get() = events.filter { it.hasPitchPosition }
+
+    /** The formation's label for a slot, falling back to the slot number. */
+    fun slotLabel(slotIndex: Int): String =
+        slotLabels[slotIndex] ?: (slotIndex + 1).toString()
+
+    /**
+     * Whoever is in goal right now. Used to credit saves without asking, since
+     * it is never anyone else.
+     */
+    val keeperOnPitch: PlayerStint?
+        get() = onPitch.firstOrNull { it.role == Position.GOALKEEPER }
 }
 
 /** How events are being entered. */
@@ -110,6 +125,10 @@ class LiveGameViewModel(
     private val _elapsedMs = MutableStateFlow(0L)
     val elapsedMs: StateFlow<Long> = _elapsedMs.asStateFlow()
 
+    // Position labels come from the formation and never change mid-game, so
+    // they're fetched once rather than joined into the observed state.
+    private val _slotLabels = MutableStateFlow<Map<Int, String>>(emptyMap())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<LiveGameUiState> =
         repository.observeGame(gameId)
@@ -120,13 +139,15 @@ class LiveGameViewModel(
                     combine(
                         repository.observeRoster(game.teamId),
                         repository.observeStints(gameId),
-                        repository.observeEvents(gameId)
-                    ) { players, stints, events ->
+                        repository.observeEvents(gameId),
+                        _slotLabels
+                    ) { players, stints, events, labels ->
                         LiveGameUiState(
                             game = game,
                             players = players.filter { it.isActive },
                             stints = stints,
                             events = events,
+                            slotLabels = labels,
                             isLoading = false
                         )
                     }
@@ -139,6 +160,14 @@ class LiveGameViewModel(
             )
 
     init {
+        viewModelScope.launch {
+            val formationId = repository.getGame(gameId)?.formationId ?: return@launch
+            _slotLabels.value = repository.getFormation(formationId)
+                ?.slotsFor(ShapePhase.DEFENDING)
+                ?.associate { it.slotIndex to it.displayLabel }
+                .orEmpty()
+        }
+
         // Recomputed from persisted clock state rather than counted up locally,
         // so backgrounding the app or locking the phone can't drift the time.
         viewModelScope.launch {
@@ -231,21 +260,37 @@ class LiveGameViewModel(
             return
         }
 
-        val needsPlayer = type.attributable &&
+
+        // A save is always our keeper's, so don't make the coach say so. Falls
+        // through to the normal prompt if nobody is in goal, which happens in
+        // keeperless 4v4.
+        val autoKeeper = if (
+            type == EventType.SAVE &&
             next.side == EventSide.US &&
+            next.playerId == null &&
+            !playerResolved
+        ) {
+            uiState.value.keeperOnPitch?.playerId
+        } else {
+            null
+        }
+        val resolved = if (autoKeeper != null) next.copy(playerId = autoKeeper) else next
+
+        val needsPlayer = type.attributable &&
+            resolved.side == EventSide.US &&
             !playerResolved &&
-            next.playerId == null
+            resolved.playerId == null
 
         when {
             needsPlayer -> {
-                draft = next
+                draft = resolved
                 stage = DraftStage.PICK_PLAYER
             }
             type in EventType.placementRelevant -> {
-                draft = next
+                draft = resolved
                 stage = DraftStage.PICK_PLACEMENT
             }
-            else -> commit(next, null, null)
+            else -> commit(resolved, null, null)
         }
     }
 

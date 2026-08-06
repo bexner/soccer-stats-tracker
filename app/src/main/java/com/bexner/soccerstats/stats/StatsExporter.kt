@@ -189,7 +189,7 @@ object StatsExporter {
             listOf(
                 cell("Half"), cell("Clock"), cell("Event"), cell("Side"), cell("Player"),
                 cell("Second player"), cell("Pitch X"), cell("Pitch Y"), cell("Third"),
-                cell("Goal X"), cell("Goal Y"), cell("Goal zone"), cell("Note")
+                cell("Goal X"), cell("Goal Y"), cell("Goal zone"), cell("Net"), cell("Note")
             )
         )
     }
@@ -219,6 +219,7 @@ object StatsExporter {
                     cell(event.goalX?.toDouble()),
                     cell(event.goalY?.toDouble()),
                     cell(event.goalZone),
+                    cell(event.goalTarget?.label),
                     cell(event.note)
                 )
             )

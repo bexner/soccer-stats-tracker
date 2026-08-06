@@ -71,6 +71,10 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Event buttons for goals, shots on and off, saves, corners, free kicks, tackles, 50/50s, fouls,
   offsides and cards — each taggable as **us** or **them**
 - Our events prompt for the player; opponent events are a single tap
+- On-pitch list leads with the **position number** from the formation (1–9), then shirt number and
+  name — on the sideline you look for "who's at 6", not for a name
+- **Saves are credited to the keeper automatically**, with no prompt; falls back to the normal picker
+  in keeperless formats where there's nobody in goal
 - Substitutions swap a player into the same slot and close out the other's spell
 - Live minutes per player, running timeline, undo on any event
 
@@ -88,7 +92,8 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Team table: goals, shots, on target, corners, fouls, saves — for and against
 - Player table: games, minutes, goals, assists, shots, on target, tackles, 50/50s
 - Minutes by position across the season
-- Shot map on the pitch and goal-placement chart, from the coordinates captured live
+- Shot map on the pitch, plus **two goal-mouth charts**: their net for our goals and shots on
+  target, ours for goals conceded and keeper saves
 
 **Export**
 
@@ -179,6 +184,20 @@ your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 
 The nine-box guides drawn in `GoalMouthView` sit at exactly the thresholds `goalZone` uses, so what
 you tap and what gets labelled can't drift apart. All four columns are nullable — events logged from
 the quick buttons simply have none, and every stat over them must tolerate that.
+
+### Which net an event belongs to
+
+`GameEvent.goalTarget` decides this in one place, so the screens and the export can't disagree. The
+non-obvious case is a save: it's logged with `side = US` because **our** keeper made it, but the ball
+was heading into **our** goal — so it belongs on the defending net, not the attacking one. The
+mirror case (their keeper saving from us) lands on the attacking net.
+
+| Event | Ours | Theirs |
+|---|---|---|
+| Goal | Attacking net | Defending net |
+| Shot on target | Attacking net | Defending net |
+| Save | **Defending** net | **Attacking** net |
+| Everything else | — | — |
 
 ### Slot indexes are the contract
 

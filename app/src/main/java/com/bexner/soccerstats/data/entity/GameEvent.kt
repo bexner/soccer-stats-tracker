@@ -5,6 +5,15 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+/**
+ * Which goal an event happened at. Shots and goals we take land in the
+ * opponent's net; goals we concede and saves our keeper makes land in ours.
+ */
+enum class GoalTarget(val label: String) {
+    ATTACKING("Attacking"),
+    DEFENDING("Defending")
+}
+
 /** Which side an event belongs to. */
 enum class EventSide(val label: String) {
     US("Us"),
@@ -121,6 +130,23 @@ data class GameEvent(
     val hasPitchPosition: Boolean get() = pitchX != null && pitchY != null
 
     val hasGoalPlacement: Boolean get() = goalX != null && goalY != null
+
+    /**
+     * The net this event happened at, or null if it never reached one.
+     *
+     * Our goals and shots on target hit the opponent's net. Their goals and
+     * shots on target, and every save our keeper makes, happen at ours — a save
+     * is logged as ours because our player made it, but the ball was heading
+     * into our own goal.
+     */
+    val goalTarget: GoalTarget?
+        get() = when {
+            type == EventType.SAVE && side == EventSide.US -> GoalTarget.DEFENDING
+            type == EventType.SAVE && side == EventSide.THEM -> GoalTarget.ATTACKING
+            type !in EventType.placementRelevant -> null
+            side == EventSide.US -> GoalTarget.ATTACKING
+            else -> GoalTarget.DEFENDING
+        }
 
     /** Which third of the pitch, named from your attacking perspective. */
     val pitchThird: String?

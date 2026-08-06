@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bexner.soccerstats.data.entity.EventSide
 import com.bexner.soccerstats.data.entity.EventType
+import com.bexner.soccerstats.data.entity.GameEvent
+import com.bexner.soccerstats.data.entity.GoalTarget
 import com.bexner.soccerstats.data.entity.Position
 import com.bexner.soccerstats.stats.PlayerStats
 import com.bexner.soccerstats.stats.TeamTotals
@@ -140,11 +142,7 @@ fun StatsScreen(
                     ShotMap(stats.events.filter { it.hasPitchPosition }.map {
                         Triple(it.pitchX!!, it.pitchY!!, it.type to it.side)
                     })
-                    GoalPlacement(
-                        stats.events.filter { it.hasGoalPlacement }.map {
-                            Triple(it.goalX!!, it.goalY!!, it.type to it.side)
-                        }
-                    )
+                    GoalNets(stats.events)
                 }
             } else {
                 val season = viewModel.seasonStats
@@ -165,13 +163,7 @@ fun StatsScreen(
                             }
                         }
                     )
-                    GoalPlacement(
-                        season.games.flatMap { g ->
-                            g.events.filter { it.hasGoalPlacement }.map {
-                                Triple(it.goalX!!, it.goalY!!, it.type to it.side)
-                            }
-                        }
-                    )
+                    GoalNets(season.games.flatMap { it.events })
                 }
             }
 
@@ -347,14 +339,59 @@ private fun ShotMap(points: List<Triple<Float, Float, Pair<EventType, EventSide>
 }
 
 @Composable
-private fun GoalPlacement(points: List<Triple<Float, Float, Pair<EventType, EventSide>>>) {
-    if (points.isEmpty()) return
+private fun GoalNets(events: List<GameEvent>) {
+    val placed = events.filter { it.hasGoalPlacement }
+    if (placed.isEmpty()) return
+
+    val attacking = placed.filter { it.goalTarget == GoalTarget.ATTACKING }
+    val defending = placed.filter { it.goalTarget == GoalTarget.DEFENDING }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (attacking.isNotEmpty()) {
+            NetPanel(
+                title = "Their net — our shots",
+                caption = "${attacking.count { it.type == EventType.GOAL }} goals, " +
+                    "${attacking.count { it.type == EventType.SHOT_ON }} on target",
+                events = attacking
+            )
+        }
+        if (defending.isNotEmpty()) {
+            NetPanel(
+                title = "Our net — shots faced",
+                caption = "${defending.count { it.type == EventType.GOAL }} conceded, " +
+                    "${defending.count { it.type == EventType.SAVE }} saved",
+                events = defending
+            )
+        }
+    }
+}
+
+@Composable
+private fun NetPanel(title: String, caption: String, events: List<GameEvent>) {
     Column {
-        Text("Goal placement", style = MaterialTheme.typography.titleSmall)
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Text(
+            caption,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(6.dp))
         GoalMouthView(
-            marks = points.map { (x, y, meta) ->
-                GoalMark(x = x, y = y, color = markerColor(meta.first, meta.second))
+            marks = events.map { event ->
+                GoalMark(
+                    x = event.goalX!!,
+                    y = event.goalY!!,
+                    color = when (event.type) {
+                        EventType.GOAL ->
+                            if (event.goalTarget == GoalTarget.ATTACKING) {
+                                Color(0xFF2E7D32)
+                            } else {
+                                Color(0xFFC62828)
+                            }
+                        EventType.SAVE -> Color(0xFFF9A825)
+                        else -> Color(0xFF1565C0)
+                    }
+                )
             },
             modifier = Modifier.fillMaxWidth().aspectRatio(1.6f)
         )
