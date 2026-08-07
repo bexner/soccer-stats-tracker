@@ -92,6 +92,11 @@ There is no `local.properties` in the repo — Android Studio writes it with you
 - Team table: goals, shots, on target, corners, fouls, saves — for and against
 - Player table: games, minutes, goals, assists, shots, on target, tackles, 50/50s
 - Minutes by position across the season
+- **Per-player page**: tap any row for a game-by-game log and a trend chart
+- Chart any metric as raw totals or **per 60 minutes played**, with bars per game and a running
+  average line
+- Keeper metrics (saves, goals conceded, save rate) appear only for players who actually kept goal,
+  and are measured against **time in goal** rather than total minutes
 - Shot map on the pitch, plus **two goal-mouth charts**: their net for our goals and shots on
   target, ours for goals conceded and keeper saves
 
@@ -184,6 +189,23 @@ your own goal line and `y = 0f` is the opponent's** — a keeper sits near `y = 
 The nine-box guides drawn in `GoalMouthView` sit at exactly the thresholds `goalZone` uses, so what
 you tap and what gets labelled can't drift apart. All four columns are nullable — events logged from
 the quick buttons simply have none, and every stat over them must tolerate that.
+
+### Goals conceded
+
+Opponent goals are charged to whoever held the goalkeeper slot **at that match time**, by testing the
+goal's clock against each keeper stint's half-open interval `[onAtMs, offAtMs)`. Half-open matters: a
+goal landing exactly on a substitution instant is counted once, against the keeper coming on, rather
+than by both or neither.
+
+That means a mid-game keeper swap splits concessions correctly, and a keeper who moves outfield isn't
+charged for what happens while they're in midfield.
+
+### Rates are folded, not averaged
+
+A season per-60 figure is computed from summed totals — `total goals × 60 / total minutes` — not by
+averaging the per-game rates. Averaging rates lets a ten-minute cameo count as much as a full game:
+one goal in 10 minutes plus zero in 60 reads as **3.0 per 60** if you average the rates, but **0.86**
+folded. The second number is the true one.
 
 ### Which net an event belongs to
 

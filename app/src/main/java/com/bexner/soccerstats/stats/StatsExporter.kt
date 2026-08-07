@@ -128,7 +128,8 @@ object StatsExporter {
                     cell("#"), cell("Player"), cell("GP"), cell("Minutes"),
                     cell("Goals"), cell("Assists"), cell("Shots"), cell("On target"),
                     cell("Accuracy"), cell("Saves"), cell("Tackles"), cell("50/50s"),
-                    cell("Fouls"), cell("Offsides"), cell("Yellow"), cell("Red")
+                    cell("Fouls"), cell("Offsides"), cell("Yellow"), cell("Red"),
+                    cell("GK minutes"), cell("Goals conceded"), cell("Save rate")
                 )
             )
             players.sortedByDescending { it.minutesMs }.forEach { p ->
@@ -149,7 +150,10 @@ object StatsExporter {
                         cell(p.fouls),
                         cell(p.offsides),
                         cell(p.yellowCards),
-                        cell(p.redCards)
+                        cell(p.redCards),
+                        cell(p.keeperMinutes),
+                        cell(if (p.playedInGoal) p.goalsConceded else null),
+                        cell(p.savePercentage)
                     )
                 )
             }

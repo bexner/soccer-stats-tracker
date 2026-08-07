@@ -24,12 +24,28 @@ data class PlayerStats(
     val offsides: Int = 0,
     val yellowCards: Int = 0,
     val redCards: Int = 0,
+    /** Opponent goals that went in while this player was the keeper on the pitch. */
+    val goalsConceded: Int = 0,
+    /** Match time spent in goal, which is what makes conceded rates meaningful. */
+    val keeperMs: Long = 0,
     /** Match time in each position, keyed by role. */
     val minutesByPosition: Map<Position, Long> = emptyMap()
 ) {
     val shots: Int get() = shotsOn + shotsOff
 
     val minutes: Long get() = minutesMs / 60000
+
+    val keeperMinutes: Long get() = keeperMs / 60000
+
+    /** True when this player kept goal at all, which gates the keeper columns. */
+    val playedInGoal: Boolean get() = keeperMs > 0
+
+    /** Shots faced that were kept out. Null when none were faced. */
+    val savePercentage: Double?
+        get() {
+            val faced = saves + goalsConceded
+            return if (faced == 0) null else saves.toDouble() / faced
+        }
 
     /** Null rather than zero when nothing was attempted, so tables can show "—". */
     val shotAccuracy: Double?
@@ -54,6 +70,8 @@ data class PlayerStats(
             offsides = offsides + other.offsides,
             yellowCards = yellowCards + other.yellowCards,
             redCards = redCards + other.redCards,
+            goalsConceded = goalsConceded + other.goalsConceded,
+            keeperMs = keeperMs + other.keeperMs,
             minutesByPosition = merged
         )
     }
@@ -160,10 +178,25 @@ object StatsCalculator {
             savesFor = count(ours, EventType.SAVE)
         )
 
+        // Opponent goals belong to whoever was keeping goal when they went in.
+        // Matching on the stint interval rather than "the current keeper" means
+        // a mid-game keeper swap splits the concessions correctly.
+        val concededGoals = theirs.filter { it.type == EventType.GOAL }
+
         val playerStats = players.map { player ->
             val own = ours.filter { it.playerId == player.id }
             val mine = stints.filter { it.playerId == player.id }
             val minutesMs = mine.sumOf { it.durationMsAt(elapsedMs) }
+            val keeperStints = mine.filter { it.role == Position.GOALKEEPER }
+            val keeperMs = keeperStints.sumOf { it.durationMsAt(elapsedMs) }
+            val conceded = concededGoals.count { goal ->
+                keeperStints.any { stint ->
+                    // Half-open interval: a goal exactly on a substitution
+                    // instant counts once, against the keeper coming on.
+                    goal.clockMs >= stint.onAtMs &&
+                        goal.clockMs < (stint.offAtMs ?: Long.MAX_VALUE)
+                }
+            }
 
             PlayerStats(
                 player = player,
@@ -183,6 +216,8 @@ object StatsCalculator {
                 offsides = own.count { it.type == EventType.OFFSIDE },
                 yellowCards = own.count { it.type == EventType.YELLOW_CARD },
                 redCards = own.count { it.type == EventType.RED_CARD },
+                goalsConceded = conceded,
+                keeperMs = keeperMs,
                 minutesByPosition = mine
                     .groupBy { it.role }
                     .mapValues { (_, list) -> list.sumOf { it.durationMsAt(elapsedMs) } }

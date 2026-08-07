@@ -12,6 +12,7 @@ import com.bexner.soccerstats.ui.games.GameEditViewModel
 import com.bexner.soccerstats.ui.games.GameListViewModel
 import com.bexner.soccerstats.ui.games.LineupViewModel
 import com.bexner.soccerstats.ui.games.LiveGameViewModel
+import com.bexner.soccerstats.ui.stats.PlayerStatsViewModel
 import com.bexner.soccerstats.ui.stats.StatsViewModel
 import com.bexner.soccerstats.ui.formations.FormationListViewModel
 import com.bexner.soccerstats.ui.roster.PlayerEditViewModel
@@ -34,6 +35,7 @@ object AppViewModelProvider {
         initializer { LineupViewModel(createSavedStateHandle(), soccerApplication().repository) }
         initializer { LiveGameViewModel(createSavedStateHandle(), soccerApplication().repository) }
         initializer { StatsViewModel(createSavedStateHandle(), soccerApplication().repository) }
+        initializer { PlayerStatsViewModel(createSavedStateHandle(), soccerApplication().repository) }
     }
 }
 

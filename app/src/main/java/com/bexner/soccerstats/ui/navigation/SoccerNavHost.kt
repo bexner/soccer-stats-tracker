@@ -14,6 +14,7 @@ import com.bexner.soccerstats.ui.games.GameEditScreen
 import com.bexner.soccerstats.ui.games.GameListScreen
 import com.bexner.soccerstats.ui.games.LineupScreen
 import com.bexner.soccerstats.ui.games.LiveGameScreen
+import com.bexner.soccerstats.ui.stats.PlayerStatsScreen
 import com.bexner.soccerstats.ui.stats.StatsScreen
 import com.bexner.soccerstats.ui.formations.FormationListScreen
 import com.bexner.soccerstats.ui.roster.PlayerEditScreen
@@ -71,6 +72,9 @@ object Routes {
 
     const val TEAM_STATS = "teams/{$TEAM_ID_ARG}/stats"
     fun teamStats(teamId: Long) = "teams/$teamId/stats"
+
+    const val PLAYER_STATS = "teams/{$TEAM_ID_ARG}/stats/player/{$PLAYER_ID_ARG}"
+    fun playerStats(teamId: Long, playerId: Long) = "teams/$teamId/stats/player/$playerId"
 
     const val FORMATION_ID_ARG = "formationId"
     const val FORMAT_ARG = "format"
@@ -189,14 +193,35 @@ fun SoccerNavHost(
             route = Routes.GAME_STATS,
             arguments = listOf(navArgument(Routes.GAME_ID_ARG) { type = NavType.LongType })
         ) {
-            StatsScreen(onBack = { navController.popBackStack() })
+            StatsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPlayer = { teamId, playerId ->
+                    navController.navigate(Routes.playerStats(teamId, playerId))
+                }
+            )
         }
 
         composable(
             route = Routes.TEAM_STATS,
             arguments = listOf(navArgument(Routes.TEAM_ID_ARG) { type = NavType.LongType })
+        ) { backStackEntry ->
+            val teamId = backStackEntry.arguments?.getLong(Routes.TEAM_ID_ARG) ?: 0L
+            StatsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPlayer = { resolvedTeamId, playerId ->
+                    navController.navigate(Routes.playerStats(resolvedTeamId, playerId))
+                }
+            )
+        }
+
+        composable(
+            route = Routes.PLAYER_STATS,
+            arguments = listOf(
+                navArgument(Routes.TEAM_ID_ARG) { type = NavType.LongType },
+                navArgument(Routes.PLAYER_ID_ARG) { type = NavType.LongType }
+            )
         ) {
-            StatsScreen(onBack = { navController.popBackStack() })
+            PlayerStatsScreen(onBack = { navController.popBackStack() })
         }
 
         composable(

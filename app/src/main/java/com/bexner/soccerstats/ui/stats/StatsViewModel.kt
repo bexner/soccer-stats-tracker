@@ -48,6 +48,13 @@ class StatsViewModel(
     var message by mutableStateOf<String?>(null)
         private set
 
+    /**
+     * Resolved once stats load. Opening a player page needs it, and when this
+     * screen was reached from a game the route only carried a game id.
+     */
+    var resolvedTeamId by mutableStateOf(0L)
+        private set
+
     private var teamName: String = ""
 
     init {
@@ -75,6 +82,7 @@ class StatsViewModel(
             } else {
                 teamIdArg
             }
+            resolvedTeamId = teamId
             teamName = repository.getTeam(teamId)?.name.orEmpty()
             val players = repository.observeRoster(teamId).first()
 

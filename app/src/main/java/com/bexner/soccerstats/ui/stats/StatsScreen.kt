@@ -1,5 +1,6 @@
 package com.bexner.soccerstats.ui.stats
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +61,7 @@ import com.bexner.soccerstats.ui.components.PitchView
 @Composable
 fun StatsScreen(
     onBack: () -> Unit,
+    onOpenPlayer: (teamId: Long, playerId: Long) -> Unit,
     viewModel: StatsViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
     val context = LocalContext.current
@@ -138,7 +140,9 @@ fun StatsScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     TotalsCard(stats.totals)
-                    PlayerTable(stats.players.filter { it.minutesMs > 0 })
+                    PlayerTable(stats.players.filter { it.minutesMs > 0 }) { playerId ->
+                        onOpenPlayer(viewModel.resolvedTeamId, playerId)
+                    }
                     ShotMap(stats.events.filter { it.hasPitchPosition }.map {
                         Triple(it.pitchX!!, it.pitchY!!, it.type to it.side)
                     })
@@ -154,7 +158,9 @@ fun StatsScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     TotalsCard(season.totals)
-                    PlayerTable(season.players)
+                    PlayerTable(season.players) { playerId ->
+                        onOpenPlayer(viewModel.resolvedTeamId, playerId)
+                    }
                     MinutesByPosition(season.players)
                     ShotMap(
                         season.games.flatMap { g ->
@@ -202,7 +208,7 @@ private fun TotalsCard(totals: TeamTotals) {
 
 /** Horizontally scrollable so the column set can grow without squashing. */
 @Composable
-private fun PlayerTable(players: List<PlayerStats>) {
+private fun PlayerTable(players: List<PlayerStats>, onOpenPlayer: (Long) -> Unit) {
     if (players.isEmpty()) {
         Text(
             "No player minutes recorded.",
@@ -216,6 +222,11 @@ private fun PlayerTable(players: List<PlayerStats>) {
 
     Column {
         Text("Players", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Tap a player for their game-by-game history.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(6.dp))
         Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
             Row {
@@ -242,7 +253,7 @@ private fun PlayerTable(players: List<PlayerStats>) {
                     p.tackles.toString(),
                     p.fiftyFifties.toString()
                 )
-                Row {
+                Row(modifier = Modifier.clickable { onOpenPlayer(p.player.id) }) {
                     cells.forEachIndexed { i, value ->
                         Text(
                             value,
